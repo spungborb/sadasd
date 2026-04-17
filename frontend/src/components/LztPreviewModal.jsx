@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { X, ShieldCheck, ShieldAlert, Crosshair, Sparkles, Star, Clock, TrendingUp, Swords, Gem, Eye, Heart, Gamepad2, Globe, Users, Tag, Loader2, Crown, Trophy, Coins, CircleDollarSign, ExternalLink } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { getValorantRankName, getRankColorFromInt, isLocalFavorite, toggleLocalFavorite, fetchMarketItem, fetchValorantSkins, fetchValorantAgents, fetchLolChampions, fetchLolSkinsAll, getCurrencySymbol, addServerFavorite, removeServerFavorite, sortSkinsByValue, formatCompact } from '@/data/api';
+import { getValorantRankName, getRankColorFromInt, isLocalFavorite, toggleLocalFavorite, fetchMarketItem, fetchValorantSkins, fetchValorantAgents, fetchLolChampions, fetchLolSkinsAll, addServerFavorite, removeServerFavorite, sortSkinsByValue, formatCompact } from '@/data/api';
+import { usePrefs, formatPrice } from '@/context/PrefContext';
 
 const TIER_COLORS = { Deluxe:'from-emerald-800 to-emerald-950 border-emerald-500/30', Premium:'from-purple-800 to-purple-950 border-purple-500/30', Select:'from-zinc-700 to-zinc-800 border-zinc-500/30', Ultra:'from-amber-800 to-amber-950 border-amber-500/30', Exclusive:'from-red-800 to-red-950 border-valorant/30', Standard:'from-zinc-800 to-zinc-900 border-zinc-600/30' };
 const LOL_RANK_COLORS = { IRON:'#8c8c8c', BRONZE:'#b87333', SILVER:'#c0c0c0', GOLD:'#ffd700', PLATINUM:'#00bcd4', EMERALD:'#00e676', DIAMOND:'#b388ff', MASTER:'#9d4dbb', GRANDMASTER:'#ff4655', CHALLENGER:'#ffe57f' };
@@ -65,6 +66,7 @@ function buildUggUrl(item) {
 }
 
 export default function LztPreviewModal({ product, category, onClose }) {
+  const { currency } = usePrefs();
   const [fav, setFav] = useState(isLocalFavorite(product.item_id));
   const [detailedItem, setDetailedItem] = useState(null);
   const [allSkins, setAllSkins] = useState([]);
@@ -96,7 +98,6 @@ export default function LztPreviewModal({ product, category, onClose }) {
   const item = detailedItem || product;
   const isVal = category === 'valorant';
   const isLol = category === 'lol';
-  const cs = getCurrencySymbol(item.price_currency);
   const publishedDate = item.published_date ? new Date(item.published_date * 1000) : null;
 
   // Valorant
@@ -220,8 +221,8 @@ export default function LztPreviewModal({ product, category, onClose }) {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-3xl sm:text-4xl font-heading font-bold text-white">{cs}{item.price?.toFixed?.(2)}</p>
-                  {comparePrice && <p className="text-xs text-zinc-500 line-through">{cs}{comparePrice.toFixed(2)}</p>}
+                  <p className="text-3xl sm:text-4xl font-heading font-bold text-white">{formatPrice(item.price, currency)}</p>
+                  {comparePrice && <p className="text-xs text-zinc-500 line-through">{formatPrice(comparePrice, currency)}</p>}
                 </div>
               </div>
             </div>
@@ -231,7 +232,7 @@ export default function LztPreviewModal({ product, category, onClose }) {
             {/* Buy + Tracker buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
               <button data-testid="buy-now-btn" className="flex-1 py-3.5 bg-valorant text-white font-heading font-bold text-sm uppercase tracking-widest rounded-lg text-center hover:bg-valorant-hover animate-neon-pulse transition-all">
-                Buy Now - {cs}{item.price?.toFixed?.(2)}
+                Buy Now - {formatPrice(item.price, currency)}
               </button>
               {isVal && trackerUrl && (
                 <a data-testid="tracker-btn" href={trackerUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-5 py-3.5 bg-zinc-800/80 border border-white/10 text-zinc-300 text-sm rounded-lg hover:bg-zinc-800 hover:text-white transition-all">

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Crosshair, Shield, Sparkles, ArrowRight, Globe, TrendingUp, GitCompare, Zap, Crown, Gem, ChevronLeft, ChevronRight, Flame } from 'lucide-react';
-import { fetchLiveStats, fetchFeatured, getCurrencySymbol, getValorantWallet, formatCompact } from '@/data/api';
+import { Crosshair, Shield, Sparkles, ArrowRight, Globe, TrendingUp, GitCompare, Zap } from 'lucide-react';
+import { fetchLiveStats, formatCompact } from '@/data/api';
+import LangCurrencySwitcher from '@/components/LangCurrencySwitcher';
 
 function useCountUp(target, duration = 1400) {
   const [val, setVal] = useState(0);
@@ -22,13 +23,12 @@ function useCountUp(target, duration = 1400) {
   return val;
 }
 
-function AnimatedStat({ target, label, suffix = '', accent = '#ff4655' }) {
+function AnimatedStat({ target, label, accent = '#ff4655' }) {
   const n = useCountUp(Number(target) || 0);
   return (
     <div className="text-center">
       <p className="text-3xl sm:text-4xl font-heading font-extrabold text-white tracking-tight">
         <span style={{ textShadow: `0 0 30px ${accent}40` }}>{formatCompact(n)}</span>
-        {suffix}
       </p>
       <p className="text-[10px] font-bold text-zinc-500 mt-1 uppercase tracking-[0.2em]">{label}</p>
     </div>
@@ -48,93 +48,15 @@ function FeatureCard({ icon: Icon, title, desc, color, delay }) {
   );
 }
 
-function FeaturedCard({ item, category, onClick }) {
-  const isVal = category === 'valorant';
-  const cs = getCurrencySymbol(item.price_currency);
-  const wallet = getValorantWallet(item);
-  const skinCount = isVal ? (item.riot_valorant_skin_count || 0) : (item.riot_lol_skin_count || 0);
-  const region = isVal ? (item.riot_valorant_region || '') : (item.riot_lol_region || '');
-  const level = isVal ? (item.riot_valorant_level || 0) : (item.riot_lol_level || 0);
-  return (
-    <motion.button onClick={onClick} whileHover={{ y: -4 }}
-      className="shrink-0 w-[280px] text-left rounded-xl overflow-hidden bg-gradient-to-b from-zinc-900/80 to-zinc-950 border border-white/10 hover:border-valorant/40 hover:shadow-[0_10px_30px_rgba(255,70,85,0.18)] transition-all duration-300">
-      <div className="relative h-28 bg-gradient-to-br from-valorant/30 via-purple-900/20 to-zinc-950 overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          {isVal ? <Crosshair className="w-16 h-16 text-white/10" /> : <Crown className="w-16 h-16 text-white/10" />}
-        </div>
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-0.5 rounded bg-valorant/90 text-white text-[9px] font-extrabold uppercase tracking-widest">
-          <Flame className="w-3 h-3" />Featured
-        </div>
-        {region && <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded bg-black/70 backdrop-blur-sm border border-white/10 text-white text-[10px] font-bold uppercase">{region}</div>}
-        <div className="absolute bottom-2.5 left-2.5 text-[10px] font-bold text-white/90 uppercase tracking-wider">LV {level}</div>
-      </div>
-      <div className="p-4">
-        <div className="flex items-baseline justify-between">
-          <span className="text-lg font-heading font-extrabold text-white">{cs}{item.price?.toFixed?.(2)}</span>
-          {item.compare_price && <span className="text-xs text-zinc-600 line-through">{cs}{item.compare_price?.toFixed?.(2)}</span>}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-[9px] font-bold text-amber-300"><Sparkles className="w-2.5 h-2.5" />{skinCount}</span>
-          {isVal && wallet.vp > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/10 text-[9px] font-bold text-purple-300"><Gem className="w-2.5 h-2.5" />{formatCompact(wallet.vp)} VP</span>
-          )}
-          {isVal && wallet.rp > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-[9px] font-bold text-amber-300">{formatCompact(wallet.rp)} RP</span>
-          )}
-        </div>
-      </div>
-    </motion.button>
-  );
-}
-
-function FeaturedCarousel({ title, items, category, onCardClick, accent }) {
-  const [scrollPos, setScrollPos] = useState(null);
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="mb-10">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center border" style={{ backgroundColor: `${accent}15`, borderColor: `${accent}30` }}>
-            <Flame className="w-4 h-4" style={{ color: accent }} />
-          </div>
-          <h3 className="text-lg font-heading font-bold text-white">{title}</h3>
-          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">· Top Picks</span>
-        </div>
-        <div className="flex gap-1.5">
-          <button onClick={() => setScrollPos({ d: -1, t: Date.now() })} className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:border-white/20 transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button onClick={() => setScrollPos({ d: 1, t: Date.now() })} className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:border-white/20 transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      <div ref={el => { if (el && scrollPos) el.scrollBy({ left: 300 * scrollPos.d, behavior: 'smooth' }); }}
-        className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
-        {items.map((it, i) => (
-          <div key={it.item_id || i} className="snap-start">
-            <FeaturedCard item={it} category={category} onClick={() => onCardClick(it, category)} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function LandingPage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
-  const [featuredVal, setFeaturedVal] = useState([]);
-  const [featuredLol, setFeaturedLol] = useState([]);
 
   useEffect(() => {
     fetchLiveStats().then(setStats).catch(() => setStats({ valorant: { total: 0 }, lol: { total: 0 } }));
-    fetchFeatured('valorant').then(d => setFeaturedVal(d.items || [])).catch(() => {});
-    fetchFeatured('lol').then(d => setFeaturedLol(d.items || [])).catch(() => {});
   }, []);
 
   const totalAccounts = (stats?.valorant?.total || 0) + (stats?.lol?.total || 0);
-  const goMarket = (item, cat) => navigate('/market', { state: { initialCategory: cat, openItem: item } });
 
   return (
     <div className="min-h-screen bg-[#09090b] noise-bg overflow-hidden">
@@ -148,10 +70,13 @@ export default function LandingPage() {
             <p className="text-[10px] font-body text-zinc-500 tracking-[0.15em] uppercase">Premium Accounts</p>
           </div>
         </div>
-        <button data-testid="landing-sign-in-btn" onClick={() => {
-          const redirectUrl = window.location.origin + '/';
-          window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-        }} className="px-4 py-2 text-sm font-semibold text-white bg-valorant/90 hover:bg-valorant rounded-lg transition-all hover:shadow-[0_0_20px_rgba(255,70,85,0.3)]">Sign In</button>
+        <div className="flex items-center gap-3">
+          <LangCurrencySwitcher />
+          <button data-testid="landing-sign-in-btn" onClick={() => {
+            const redirectUrl = window.location.origin + '/';
+            window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+          }} className="px-4 py-2 text-sm font-semibold text-white bg-valorant/90 hover:bg-valorant rounded-lg transition-all hover:shadow-[0_0_20px_rgba(255,70,85,0.3)]">Sign In</button>
+        </div>
       </nav>
 
       {/* HERO */}
@@ -191,12 +116,6 @@ export default function LandingPage() {
             <p className="text-[10px] font-bold text-zinc-500 mt-1 uppercase tracking-[0.2em]">Live Sync</p>
           </div>
         </motion.div>
-      </section>
-
-      {/* FEATURED CAROUSELS */}
-      <section className="max-w-[1200px] mx-auto px-6 pb-10">
-        <FeaturedCarousel title="Featured Valorant" items={featuredVal} category="valorant" onCardClick={goMarket} accent="#ff4655" />
-        <FeaturedCarousel title="Featured League of Legends" items={featuredLol} category="lol" onCardClick={goMarket} accent="#fbbf24" />
       </section>
 
       {/* WHY */}

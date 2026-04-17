@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Crosshair, Store, LogOut, Settings } from 'lucide-react';
 import { logout as apiLogout } from '@/data/api';
+import LangCurrencySwitcher from '@/components/LangCurrencySwitcher';
 
 export default function Navbar({ user, setUser }) {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ export default function Navbar({ user, setUser }) {
           {user?.is_admin && <button data-testid="nav-admin" onClick={() => navigate('/admin')} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"><Settings className="w-4 h-4" />Admin</button>}
         </div>
         <div className="flex items-center gap-3">
+          <LangCurrencySwitcher />
           {/* Live API indicator — admin only */}
           {user?.is_admin && (
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/60 border border-white/5">

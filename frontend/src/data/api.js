@@ -1,17 +1,36 @@
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Keys that LZT expects in array-bracket form (even for single values).
+const ARRAY_KEYS = new Set([
+  'valorant_region', 'lol_region', 'origin', 'not_origin',
+  'rank', 'valorant_inventory_skin',
+]);
+
+function buildQuery(params) {
+  const sp = new URLSearchParams();
+  if (!params) return '';
+  for (const [rawK, rawV] of Object.entries(params)) {
+    if (rawV === undefined || rawV === null || rawV === '' || rawV === false) continue;
+    const values = Array.isArray(rawV) ? rawV : [rawV];
+    const key = ARRAY_KEYS.has(rawK) ? `${rawK}[]` : rawK;
+    for (const v of values) {
+      if (v === undefined || v === null || v === '') continue;
+      sp.append(key, String(v));
+    }
+  }
+  return sp.toString();
+}
+
 // ==================== MARKET ====================
 export async function fetchMarketSearch(category = 'valorant', params = {}) {
-  const sp = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') sp.set(k, String(v)); });
-  const resp = await fetch(`${API}/market/search/${category}?${sp.toString()}`);
+  const qs = buildQuery(params);
+  const resp = await fetch(`${API}/market/search/${category}?${qs}`);
   if (!resp.ok) throw new Error(`API error: ${resp.status}`);
   return resp.json();
 }
 export async function fetchByProfile(profileId, params = {}) {
-  const sp = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') sp.set(k, String(v)); });
-  const resp = await fetch(`${API}/market/profile/${profileId}?${sp.toString()}`);
+  const qs = buildQuery(params);
+  const resp = await fetch(`${API}/market/profile/${profileId}?${qs}`);
   if (!resp.ok) throw new Error(`API error: ${resp.status}`);
   return resp.json();
 }

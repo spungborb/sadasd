@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { RotateCcw, DollarSign, ArrowUpDown, MapPin, Crosshair, Swords, Sparkles, ChevronDown, Filter, Globe } from 'lucide-react';
+import { RotateCcw, DollarSign, ArrowUpDown, MapPin, Crosshair, Swords, Sparkles, ChevronDown, Filter, Globe, Search, Gem, CircleDollarSign, TrendingUp, Crown } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +11,7 @@ function Section({ icon: Icon, title, accent = '#ff4655', children, defaultOpen 
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div data-testid={testId} className="border-b border-white/5 last:border-b-0">
-      <button onClick={() => setOpen(o => !o)}
+      <button type="button" onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between py-3.5 group">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}15`, border: `1px solid ${accent}30` }}>
@@ -28,13 +28,36 @@ function Section({ icon: Icon, title, accent = '#ff4655', children, defaultOpen 
   );
 }
 
+function DualSlider({ testId, minKey, maxKey, min, max, step, filters, onFilterChange, accent = '#ff4655', format = v => v, suffix = '' }) {
+  const vMin = filters[minKey] ?? min;
+  const vMax = filters[maxKey] ?? max;
+  return (
+    <div className="px-1 space-y-3">
+      <Slider data-testid={testId}
+        value={[Number(vMin), Number(vMax)]}
+        onValueChange={([a, b]) => {
+          onFilterChange(minKey, a <= min ? undefined : a);
+          onFilterChange(maxKey, b >= max ? undefined : b);
+        }}
+        min={min} max={max} step={step}
+        style={{ '--accent': accent }}
+        className="[&_[role=slider]]:bg-[var(--accent,#ff4655)] [&_[role=slider]]:border-[var(--accent,#ff4655)]/50 [&_[role=slider]]:shadow-[0_0_10px_var(--accent,#ff4655)] [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_.relative_.absolute]:bg-[var(--accent,#ff4655)]" />
+      <div className="flex justify-between text-[11px]">
+        <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5"><span className="text-zinc-500">min </span><span className="text-white font-semibold">{format(vMin)}{suffix}</span></div>
+        <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5"><span className="text-zinc-500">max </span><span className="text-white font-semibold">{format(vMax)}{vMax >= max ? '+' : ''}{suffix}</span></div>
+      </div>
+    </div>
+  );
+}
+
 export default function FilterPanel({ filters, onFilterChange, onReset, resultCount, category }) {
   const isVal = category === 'valorant';
+  const isLol = category === 'lol';
   const activeCount = Object.entries(filters).filter(([k, v]) => {
-    if (['order_by', 'currency'].includes(k)) return false;
-    if (k === 'pmin' && (v === 0 || v === undefined)) return false;
-    if (k === 'pmax' && (v === 500 || v === undefined)) return false;
-    return v !== undefined && v !== null && v !== '' && v !== 0 && v !== false;
+    if (k === 'order_by') return false;
+    if (v === undefined || v === null || v === '' || v === 0 || v === false) return false;
+    if (k === 'pmax' && Number(v) >= 500) return false;
+    return true;
   }).length;
 
   return (
@@ -55,7 +78,7 @@ export default function FilterPanel({ filters, onFilterChange, onReset, resultCo
               </p>
             </div>
           </div>
-          <button data-testid="reset-filters-btn" onClick={onReset}
+          <button type="button" data-testid="reset-filters-btn" onClick={onReset}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold text-zinc-400 hover:text-white hover:bg-white/5 uppercase tracking-wider transition-colors">
             <RotateCcw className="w-3 h-3" />Reset
           </button>
@@ -63,51 +86,39 @@ export default function FilterPanel({ filters, onFilterChange, onReset, resultCo
       </div>
 
       <div className="px-5">
-        {/* Sort + Currency */}
-        <Section icon={ArrowUpDown} title="Sort & Currency" accent="#00e5ff" testId="section-sort">
-          <div className="grid grid-cols-2 gap-2">
-            <Select value={filters.order_by || 'pdate_to_down'} onValueChange={v => onFilterChange('order_by', v)}>
-              <SelectTrigger data-testid="sort-select" className="bg-zinc-900/80 border-white/10 text-white text-xs h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                <SelectItem value="pdate_to_down">Newest</SelectItem>
-                <SelectItem value="pdate_to_up">Oldest</SelectItem>
-                <SelectItem value="price_to_up">Cheapest</SelectItem>
-                <SelectItem value="price_to_down">Priciest</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.currency || 'usd'} onValueChange={v => onFilterChange('currency', v)}>
-              <SelectTrigger data-testid="currency-select" className="bg-zinc-900/80 border-white/10 text-white text-xs h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                <SelectItem value="usd">USD $</SelectItem>
-                <SelectItem value="eur">EUR €</SelectItem>
-                <SelectItem value="try">TRY ₺</SelectItem>
-                <SelectItem value="rub">RUB ₽</SelectItem>
-              </SelectContent>
-            </Select>
+        {/* Sort */}
+        <Section icon={ArrowUpDown} title="Sort By" accent="#00e5ff" testId="section-sort">
+          <Select value={filters.order_by || 'pdate_to_down'} onValueChange={v => onFilterChange('order_by', v)}>
+            <SelectTrigger data-testid="sort-select" className="bg-zinc-900/80 border-white/10 text-white text-xs h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+              <SelectItem value="pdate_to_down">Newest First</SelectItem>
+              <SelectItem value="pdate_to_up">Oldest First</SelectItem>
+              <SelectItem value="price_to_up">Cheapest First</SelectItem>
+              <SelectItem value="price_to_down">Priciest First</SelectItem>
+            </SelectContent>
+          </Select>
+        </Section>
+
+        {/* Exact Skin Search */}
+        <Section icon={Search} title="Skin Search" accent="#fbbf24" testId="section-skin-search">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />
+            <input data-testid="skin-search-input" type="text"
+              placeholder={isVal ? 'e.g. "Kuronami", "Prime Vandal"' : 'e.g. "DJ Sona", "KDA Ahri"'}
+              value={filters.title || ''}
+              onChange={e => onFilterChange('title', e.target.value || undefined)}
+              className="w-full pl-9 pr-3 py-2.5 bg-zinc-900/80 border border-white/10 rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40 transition-colors" />
           </div>
+          <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">Searches listing titles &amp; descriptions for specific skin names.</p>
         </Section>
 
         {/* Price */}
         <Section icon={DollarSign} title="Price Range" accent="#ff4655" testId="section-price">
-          <div className="px-1">
-            <Slider data-testid="price-range-slider"
-              value={[filters.pmin || 0, filters.pmax || 500]}
-              onValueChange={([min, max]) => { onFilterChange('pmin', min); onFilterChange('pmax', max); }}
-              min={0} max={2000} step={10}
-              className="[&_[role=slider]]:bg-valorant [&_[role=slider]]:border-valorant/50 [&_[role=slider]]:shadow-[0_0_10px_rgba(255,70,85,0.5)] [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_.relative_.absolute]:bg-gradient-to-r [&_.relative_.absolute]:from-valorant [&_.relative_.absolute]:to-valorant/70" />
-            <div className="flex justify-between mt-3 text-[11px]">
-              <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5">
-                <span className="text-zinc-500">min </span><span className="text-white font-semibold">${filters.pmin || 0}</span>
-              </div>
-              <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5">
-                <span className="text-zinc-500">max </span><span className="text-white font-semibold">${filters.pmax || 500}+</span>
-              </div>
-            </div>
-          </div>
+          <DualSlider testId="price-range-slider" minKey="pmin" maxKey="pmax" min={0} max={2000} step={10}
+            filters={filters} onFilterChange={onFilterChange} accent="#ff4655"
+            format={v => `$${v}`} />
         </Section>
 
         {/* Region */}
@@ -116,16 +127,16 @@ export default function FilterPanel({ filters, onFilterChange, onReset, resultCo
             <div className="grid grid-cols-3 gap-1.5">
               {[
                 { v: 'default', label: 'All' },
-                { v: 'eu', label: 'EU' },
-                { v: 'na', label: 'NA' },
-                { v: 'ap', label: 'AP' },
-                { v: 'kr', label: 'KR' },
-                { v: 'br', label: 'BR' },
-                { v: 'latam', label: 'LATAM' },
+                { v: 'EU', label: 'EU' },
+                { v: 'NA', label: 'NA' },
+                { v: 'AP', label: 'AP' },
+                { v: 'KR', label: 'KR' },
+                { v: 'BR', label: 'BR' },
+                { v: 'LATAM', label: 'LATAM' },
               ].map(r => {
                 const active = (filters.valorant_region || 'default') === r.v;
                 return (
-                  <button key={r.v} data-testid={`region-chip-${r.v}`}
+                  <button type="button" key={r.v} data-testid={`region-chip-${r.v}`}
                     onClick={() => onFilterChange('valorant_region', r.v === 'default' ? undefined : r.v)}
                     className={`h-9 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all border ${active ? 'bg-valorant/15 text-valorant border-valorant/40 shadow-[0_0_12px_rgba(255,70,85,0.2)]' : 'bg-zinc-900/50 text-zinc-400 border-white/5 hover:border-white/20 hover:text-white'}`}>
                     {r.label}
@@ -139,39 +150,45 @@ export default function FilterPanel({ filters, onFilterChange, onReset, resultCo
         {/* Rank (Valorant) */}
         {isVal && (
           <Section icon={Crosshair} title="Rank Range" accent="#a78bfa" testId="section-rank">
-            <div className="px-1">
+            <div className="px-1 space-y-3">
               <Slider data-testid="rank-range-slider"
                 value={[filters.rmin || 0, filters.rmax || 27]}
                 onValueChange={([min, max]) => { onFilterChange('rmin', min || undefined); onFilterChange('rmax', max >= 27 ? undefined : max); }}
                 min={0} max={27} step={1}
-                className="[&_[role=slider]]:bg-electric [&_[role=slider]]:border-electric/50 [&_[role=slider]]:shadow-[0_0_10px_rgba(0,229,255,0.5)] [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_.relative_.absolute]:bg-gradient-to-r [&_.relative_.absolute]:from-electric/60 [&_.relative_.absolute]:to-electric" />
-              <div className="flex justify-between mt-3 text-[11px]">
-                <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5">
-                  <span className="text-white font-semibold">{VAL_RANK_NAMES[filters.rmin || 0]}</span>
-                </div>
-                <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5">
-                  <span className="text-white font-semibold">{VAL_RANK_NAMES[filters.rmax || 27]}</span>
-                </div>
+                className="[&_[role=slider]]:bg-electric [&_[role=slider]]:border-electric/50 [&_[role=slider]]:shadow-[0_0_10px_rgba(0,229,255,0.5)] [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_.relative_.absolute]:bg-electric" />
+              <div className="flex justify-between text-[11px]">
+                <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5"><span className="text-white font-semibold">{VAL_RANK_NAMES[filters.rmin || 0]}</span></div>
+                <div className="px-2 py-1 rounded-md bg-zinc-900/80 border border-white/5"><span className="text-white font-semibold">{VAL_RANK_NAMES[filters.rmax || 27]}</span></div>
               </div>
             </div>
           </Section>
         )}
 
-        {/* Skins & Knife */}
+        {/* Valorant numeric ranges */}
         {isVal && (
-          <Section icon={Sparkles} title="Skins & Loadout" accent="#fbbf24" testId="section-skins">
-            <div className="space-y-4 px-1">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Min Skins</span>
-                  <span className="text-[11px] font-bold text-amber-400">{filters.valorant_smin || 0}+</span>
-                </div>
-                <Slider data-testid="min-skins-slider"
-                  value={[filters.valorant_smin || 0]}
-                  onValueChange={([v]) => onFilterChange('valorant_smin', v || undefined)}
-                  min={0} max={200} step={5}
-                  className="[&_[role=slider]]:bg-amber-400 [&_[role=slider]]:border-amber-400/50 [&_[role=slider]]:shadow-[0_0_10px_rgba(251,191,36,0.5)] [&_.relative_.absolute]:bg-amber-400" />
-              </div>
+          <>
+            <Section icon={TrendingUp} title="Account Level" accent="#00e5ff" testId="section-val-level">
+              <DualSlider testId="val-level-range" minKey="lmin" maxKey="lmax" min={0} max={500} step={5}
+                filters={filters} onFilterChange={onFilterChange} accent="#00e5ff" suffix="" />
+            </Section>
+
+            <Section icon={Sparkles} title="Total Skins" accent="#fbbf24" testId="section-val-skins">
+              <DualSlider testId="val-skins-range" minKey="valorant_smin" maxKey="valorant_smax" min={0} max={300} step={5}
+                filters={filters} onFilterChange={onFilterChange} accent="#fbbf24" />
+            </Section>
+
+            <Section icon={Gem} title="Valorant Points (VP)" accent="#a78bfa" testId="section-val-vp">
+              <DualSlider testId="val-vp-range" minKey="valorant_vp_min" maxKey="valorant_vp_max" min={0} max={50000} step={100}
+                filters={filters} onFilterChange={onFilterChange} accent="#a78bfa"
+                format={v => Number(v) >= 1000 ? `${(Number(v)/1000).toFixed(1)}K` : v} />
+            </Section>
+
+            <Section icon={Sparkles} title="Radianite Points (RP)" accent="#fbbf24" testId="section-val-rp" defaultOpen={false}>
+              <DualSlider testId="val-rp-range" minKey="valorant_rp_min" maxKey="valorant_rp_max" min={0} max={10000} step={50}
+                filters={filters} onFilterChange={onFilterChange} accent="#fbbf24" />
+            </Section>
+
+            <Section icon={Swords} title="Knives" accent="#ff4655" testId="section-val-knife" defaultOpen={false}>
               <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-900/50 border border-white/5">
                 <div className="flex items-center gap-2">
                   <Swords className="w-3.5 h-3.5 text-valorant" />
@@ -181,24 +198,82 @@ export default function FilterPanel({ filters, onFilterChange, onReset, resultCo
                   onCheckedChange={v => onFilterChange('knife', v || undefined)}
                   className="data-[state=checked]:bg-valorant scale-90" />
               </div>
-            </div>
-          </Section>
+            </Section>
+          </>
         )}
 
-        {/* Level (both) */}
-        <Section icon={MapPin} title="Account Level" accent="#00e5ff" testId="section-level" defaultOpen={false}>
-          <div className="px-1">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Min Level</span>
-              <span className="text-[11px] font-bold text-electric">{filters.lmin || 0}+</span>
-            </div>
-            <Slider data-testid="min-level-slider"
-              value={[filters.lmin || 0]}
-              onValueChange={([v]) => onFilterChange('lmin', v || undefined)}
-              min={0} max={500} step={5}
-              className="[&_[role=slider]]:bg-electric [&_[role=slider]]:border-electric/50 [&_[role=slider]]:shadow-[0_0_10px_rgba(0,229,255,0.5)] [&_.relative_.absolute]:bg-electric" />
-          </div>
-        </Section>
+        {/* LoL numeric ranges */}
+        {isLol && (
+          <>
+            <Section icon={MapPin} title="Region" accent="#00e676" testId="section-lol-region">
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { v: 'default', label: 'All' },
+                  { v: 'EUW1', label: 'EUW' },
+                  { v: 'EUN1', label: 'EUNE' },
+                  { v: 'NA1', label: 'NA' },
+                  { v: 'KR', label: 'KR' },
+                  { v: 'BR1', label: 'BR' },
+                  { v: 'TR1', label: 'TR' },
+                  { v: 'RU', label: 'RU' },
+                  { v: 'JP1', label: 'JP' },
+                ].map(r => {
+                  const active = (filters.lol_region || 'default') === r.v;
+                  return (
+                    <button type="button" key={r.v} data-testid={`lol-region-chip-${r.v}`}
+                      onClick={() => onFilterChange('lol_region', r.v === 'default' ? undefined : r.v)}
+                      className={`h-9 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all border ${active ? 'bg-amber-500/15 text-amber-400 border-amber-500/40 shadow-[0_0_12px_rgba(251,191,36,0.2)]' : 'bg-zinc-900/50 text-zinc-400 border-white/5 hover:border-white/20 hover:text-white'}`}>
+                      {r.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+
+            <Section icon={Crown} title="Rank" accent="#a78bfa" testId="section-lol-rank">
+              <Select value={filters.lol_rank || 'any'} onValueChange={v => onFilterChange('lol_rank', v === 'any' ? undefined : v)}>
+                <SelectTrigger data-testid="lol-rank-select" className="bg-zinc-900/80 border-white/10 text-white text-xs h-9">
+                  <SelectValue placeholder="Any rank" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                  <SelectItem value="any">Any Rank</SelectItem>
+                  <SelectItem value="iron">Iron</SelectItem>
+                  <SelectItem value="bronze">Bronze</SelectItem>
+                  <SelectItem value="silver">Silver</SelectItem>
+                  <SelectItem value="gold">Gold</SelectItem>
+                  <SelectItem value="platinum">Platinum</SelectItem>
+                  <SelectItem value="emerald">Emerald</SelectItem>
+                  <SelectItem value="diamond">Diamond</SelectItem>
+                  <SelectItem value="master">Master</SelectItem>
+                  <SelectItem value="grandmaster">Grandmaster</SelectItem>
+                  <SelectItem value="challenger">Challenger</SelectItem>
+                </SelectContent>
+              </Select>
+            </Section>
+
+            <Section icon={TrendingUp} title="Account Level" accent="#00e5ff" testId="section-lol-level">
+              <DualSlider testId="lol-level-range" minKey="lmin" maxKey="lmax" min={0} max={900} step={5}
+                filters={filters} onFilterChange={onFilterChange} accent="#00e5ff" />
+            </Section>
+
+            <Section icon={Sparkles} title="Total Skins" accent="#fbbf24" testId="section-lol-skins">
+              <DualSlider testId="lol-skins-range" minKey="lol_smin" maxKey="lol_smax" min={0} max={500} step={5}
+                filters={filters} onFilterChange={onFilterChange} accent="#fbbf24" />
+            </Section>
+
+            <Section icon={Gem} title="Blue Essence (BE)" accent="#3b82f6" testId="section-lol-be" defaultOpen={false}>
+              <DualSlider testId="lol-be-range" minKey="lol_be_min" maxKey="lol_be_max" min={0} max={500000} step={1000}
+                filters={filters} onFilterChange={onFilterChange} accent="#3b82f6"
+                format={v => Number(v) >= 1000 ? `${(Number(v)/1000).toFixed(0)}K` : v} />
+            </Section>
+
+            <Section icon={CircleDollarSign} title="Riot Points (RP)" accent="#fbbf24" testId="section-lol-rp" defaultOpen={false}>
+              <DualSlider testId="lol-rp-range" minKey="lol_rp_min" maxKey="lol_rp_max" min={0} max={50000} step={100}
+                filters={filters} onFilterChange={onFilterChange} accent="#fbbf24"
+                format={v => Number(v) >= 1000 ? `${(Number(v)/1000).toFixed(1)}K` : v} />
+            </Section>
+          </>
+        )}
       </div>
 
       <div className="h-3" />

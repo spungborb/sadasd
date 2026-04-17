@@ -4,6 +4,7 @@ import LandingPage from "@/components/LandingPage";
 import Dashboard from "@/components/Dashboard";
 import AuthCallback from "@/components/AuthCallback";
 import AdminDashboard from "@/components/AdminDashboard";
+import { PrefProvider } from "@/context/PrefContext";
 
 function AppRouter() {
   const location = useLocation();
@@ -19,9 +20,11 @@ function AppRouter() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppRouter />
-    </BrowserRouter>
+    <PrefProvider>
+      <BrowserRouter>
+        <AppRouter />
+      </BrowserRouter>
+    </PrefProvider>
   );
 }
 

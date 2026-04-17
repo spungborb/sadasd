@@ -238,10 +238,15 @@ async def search_by_profile(profile_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Profile not found")
     settings = await get_settings()
     category = profile["category"]
-    # Merge profile params with request query params (page, currency overrides)
+    # Merge profile params with request query params (preserve duplicates for LZT array keys)
     params = dict(profile.get("parsed_params", {}))
-    for k, v in request.query_params.items():
-        params[k] = v
+    for k, v in request.query_params.multi_items():
+        if k in params and isinstance(params[k], list):
+            params[k].append(v)
+        elif k in params:
+            params[k] = [params[k], v]
+        else:
+            params[k] = v
     if "currency" not in params:
         params["currency"] = "usd"
     cache_key = f"profile:{profile_id}:{str(sorted(str(params).encode()))}"
@@ -497,9 +502,14 @@ async def search_market(category: str, request: Request):
         params = dict(base_parsed.get("params", {}))
     else:
         params = {}
-    # Override/merge with request query params
-    for k, v in request.query_params.items():
-        params[k] = v
+    # Override/merge with request query params (preserve duplicate keys for array-style LZT params)
+    for k, v in request.query_params.multi_items():
+        if k in params and isinstance(params[k], list):
+            params[k].append(v)
+        elif k in params:
+            params[k] = [params[k], v]
+        else:
+            params[k] = v
     if "currency" not in params: params["currency"] = "usd"
     # Flatten list params for cache key
     cache_key = f"search:{category}:{str(sorted(str(params).encode()))}"
@@ -517,6 +527,7 @@ async def search_market(category: str, request: Request):
         else:
             flat_params.append((k, v))
     try:
+        logger.info(f"LZT search: {category} params={dict(flat_params[:10])}")
         resp = await http_client.get(url, params=flat_params)
         resp.raise_for_status()
         data = resp.json()

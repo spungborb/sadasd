@@ -8,9 +8,11 @@ import ProductGrid from '@/components/ProductGrid';
 import LztPreviewModal from '@/components/LztPreviewModal';
 import CompareModal from '@/components/CompareModal';
 import { fetchMarketSearch, fetchByProfile, fetchMe, syncFavorites, fetchProfiles } from '@/data/api';
+import { usePrefs } from '@/context/PrefContext';
 
 export default function Dashboard() {
   const location = useLocation();
+  const { currency } = usePrefs();
   const [user, setUser] = useState(location.state?.user || null);
   const [products, setProducts] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
@@ -22,7 +24,7 @@ export default function Dashboard() {
   const [page, setPage] = useState(1);
   const [compareItems, setCompareItems] = useState([]);
   const [showCompare, setShowCompare] = useState(false);
-  const [filters, setFilters] = useState({ pmin: 0, pmax: 500, order_by: 'pdate_to_down', currency: 'usd' });
+  const [filters, setFilters] = useState({ pmin: 0, pmax: 500, order_by: 'pdate_to_down' });
 
   // Profile system
   const [profiles, setProfiles] = useState([]);
@@ -46,10 +48,11 @@ export default function Dashboard() {
       let data;
       if (activeProfileId) {
         // Fetch using saved profile URL params
-        data = await fetchByProfile(activeProfileId, { page, currency: filters.currency });
+        data = await fetchByProfile(activeProfileId, { page, currency });
       } else {
         // Generic category search
-        const params = { ...filters, page };
+        const params = { ...filters, page, currency };
+        // `title` is set by FilterPanel (Skin Search). Top search input also maps to title.
         if (searchQuery.trim()) params.title = searchQuery.trim();
         data = await fetchMarketSearch(activeCategory, params);
       }
@@ -66,12 +69,20 @@ export default function Dashboard() {
       setTotalItems(data.totalItems || 0);
     } catch (err) { setError(err.message); setProducts([]); }
     finally { setIsLoading(false); }
-  }, [activeCategory, activeProfileId, filters, page, searchQuery]);
+  }, [activeCategory, activeProfileId, filters, page, searchQuery, currency]);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
-  const handleFilterChange = useCallback((k, v) => { setFilters(p => ({...p, [k]: v})); setPage(1); }, []);
-  const resetFilters = useCallback(() => { setFilters({pmin:0,pmax:500,order_by:'pdate_to_down',currency:'usd'}); setSearchQuery(''); setPage(1); }, []);
+  const handleFilterChange = useCallback((k, v) => {
+    setFilters(p => {
+      const next = { ...p };
+      if (v === undefined || v === null || v === '' || v === false) delete next[k];
+      else next[k] = v;
+      return next;
+    });
+    setPage(1);
+  }, []);
+  const resetFilters = useCallback(() => { setFilters({ pmin: 0, pmax: 500, order_by: 'pdate_to_down' }); setSearchQuery(''); setPage(1); }, []);
   const handleSearch = useCallback((e) => { e.preventDefault(); setPage(1); }, []);
   const toggleCompare = useCallback((product) => {
     setCompareItems(prev => {

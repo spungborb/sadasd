@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { X, Crosshair, Sparkles, TrendingUp, Gem, Swords, Gamepad2, Globe } from 'lucide-react';
-import { getValorantRankName, getRankColorFromInt, getCurrencySymbol } from '@/data/api';
+import { getValorantRankName, getRankColorFromInt } from '@/data/api';
+import { usePrefs, formatPrice } from '@/context/PrefContext';
 
 function Stat({ label, valueA, valueB, icon: Icon, color }) {
   const numA = typeof valueA === 'number' ? valueA : 0;
@@ -19,8 +20,8 @@ function Stat({ label, valueA, valueB, icon: Icon, color }) {
 }
 
 export default function CompareModal({ items, category, onClose }) {
+  const { currency } = usePrefs();
   const [a, b] = items;
-  const cs = getCurrencySymbol(a.price_currency);
 
   return (
     <motion.div data-testid="compare-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -35,17 +36,17 @@ export default function CompareModal({ items, category, onClose }) {
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="text-right">
             <p className="text-sm font-heading font-bold text-white truncate">{a.title}</p>
-            <p className="text-xs text-valorant font-bold">{cs}{a.price?.toFixed(2)}</p>
+            <p className="text-xs text-valorant font-bold">{formatPrice(a.price, currency)}</p>
           </div>
           <div className="text-center text-xs text-zinc-600 font-bold uppercase">VS</div>
           <div className="text-left">
             <p className="text-sm font-heading font-bold text-white truncate">{b.title}</p>
-            <p className="text-xs text-valorant font-bold">{cs}{b.price?.toFixed(2)}</p>
+            <p className="text-xs text-valorant font-bold">{formatPrice(b.price, currency)}</p>
           </div>
         </div>
 
         <div className="border-t border-white/5 pt-4 space-y-1">
-          <Stat label="Price" valueA={`${cs}${a.price?.toFixed(2)}`} valueB={`${cs}${b.price?.toFixed(2)}`} icon={null} />
+          <Stat label="Price" valueA={formatPrice(a.price, currency)} valueB={formatPrice(b.price, currency)} icon={null} />
           <Stat label="Region" valueA={a.riot_valorant_region || '-'} valueB={b.riot_valorant_region || '-'} icon={Globe} color="#a1a1aa" />
           <Stat label="Rank" valueA={a.valorantRankTitle || getValorantRankName(a.riot_valorant_rank||0)} valueB={b.valorantRankTitle || getValorantRankName(b.riot_valorant_rank||0)} icon={Crosshair} color={getRankColorFromInt(a.riot_valorant_rank||0)} />
           <Stat label="Level" valueA={a.riot_valorant_level||0} valueB={b.riot_valorant_level||0} icon={TrendingUp} color="#00e5ff" />
