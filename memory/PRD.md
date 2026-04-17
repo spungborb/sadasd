@@ -24,25 +24,20 @@ Clone https://github.com/spung2/sadasdasd into /app and run it.
 - MongoDB TTL cache for external API responses
 
 ## What's Been Implemented (Apr 17, 2026)
-- Full repo mirrored to /app (backend + frontend + memory + tests)
-- Python & Node deps installed, supervisor running
-- LZT_MARKET_TOKEN configured → 35K+ live listings live
-- **Refactor Wave 1 (Apr 17, 2026):**
-  - Product cards: real Valorant agent portraits (fullPortrait + gradient bg) + LoL splash art, defensive image fallback
-  - Valorant skin inventory sorted by tier value (Exclusive → Ultra → Premium → Deluxe → Select → Standard)
-  - LoL skin names mapped via CommunityDragon (real skin names, not just champion name)
-  - Tag blacklist enforced: brute/resale/personal/personel/autoreg never rendered
-  - Origin filter removed entirely
-  - VP/RP totals on product cards (pills) AND modal (gradient highlight cards)
-  - New premium `FilterPanel.jsx` with collapsible sections, chip region selector, glassmorphism
-  - Dynamic landing page: animated count-up live stats + Featured Valorant/LoL carousels
-  - Admin panel expanded: Overview (recharts: line/pie/bar), Sync Status (cache metrics + quick-clear actions)
-  - New backend endpoints: /api/stats/live, /api/featured/{category}, /api/lol/skins-all, /api/admin/analytics, /api/admin/cache/clear
-  - /api/valorant/agents now returns backgroundGradientColors
+- Full repo mirrored to /app, LZT token configured, 41K+ live listings
+- **Refactor Wave 1:** cards with agent portraits, VP/RP pills, tier-sorted skins, LoL real skin names, origin blacklist, premium FilterPanel, dynamic landing, admin Overview/Sync tabs
+- **Refactor Wave 2 (Apr 17, 2026):**
+  - Fixed broken filters: backend uses `query_params.multi_items()`, frontend uses bracketed array keys for LZT; region codes uppercase (LZT is case-sensitive)
+  - Advanced filters added: Skin Search text input, dual-range sliders for Level/Skins/VP/RP (Valorant) and Level/Skins/BE/RP (LoL); LoL rank dropdown
+  - Language & Currency moved from sidebar to Navbar via `LangCurrencySwitcher` + global `PrefContext`
+  - Client-side currency conversion with fixed USD rates (USD/EUR/GBP/RUB/TRY), applied globally through `formatPrice()` in cards / modals / compare view
+  - Featured Valorant/LoL carousels removed from Landing — flow now Hero → Live Stats → Why Game Vault
+  - ProductCard redesign: image contains only top-left icons + top-right region badge (no bottom overlay); title = rank only; price prominent; unified stats pill row (LV, Skins, Agents, Knives, VP, RP / LV, Skins, Champs, BE, RP)
 
 ## Test Status
-- **Iteration 9 (Apr 17, 2026):** Backend 29/29 passed (100%). No critical/minor issues.
-- **Iteration 8:** Baseline 17/17 passed.
+- **Iteration 10 (Apr 17, 2026):** Backend 16/16 passed (100%) — filter pipeline validated
+- **Iteration 9:** 29/29 passed — new endpoints + auth gates
+- **Iteration 8:** 17/17 passed — baseline
 
 ## Known Non-Issues
 - `/api/featured/lol` returns 0 items when LoL cache empty (expected graceful fallback).
