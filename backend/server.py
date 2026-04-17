@@ -346,16 +346,24 @@ async def get_valorant_skins():
 
 @api_router.get("/valorant/agents")
 async def get_valorant_agents():
-    cached = await db.lzt_cache.find_one({"cache_key": "valorant_agents"}, {"_id": 0})
+    cached = await db.lzt_cache.find_one({"cache_key": "valorant_agents_v2"}, {"_id": 0})
     if cached and cached.get("data"):
         return cached["data"]
     try:
         resp = await val_http.get("https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=en-US")
         resp.raise_for_status()
-        agents = [{"uuid": a["uuid"], "displayName": a["displayName"], "displayIcon": a.get("displayIcon"), "fullPortrait": a.get("fullPortrait"), "background": a.get("background"), "bustPortrait": a.get("bustPortrait")} for a in resp.json().get("data", []) if a.get("displayIcon")]
+        agents = [{
+            "uuid": a["uuid"],
+            "displayName": a["displayName"],
+            "displayIcon": a.get("displayIcon"),
+            "fullPortrait": a.get("fullPortrait"),
+            "background": a.get("background"),
+            "bustPortrait": a.get("bustPortrait"),
+            "backgroundGradientColors": a.get("backgroundGradientColors", []),
+        } for a in resp.json().get("data", []) if a.get("displayIcon")]
         result = {"agents": agents}
         ea = datetime.now(timezone.utc) + timedelta(seconds=CACHE_TTL_SKINS)
-        await db.lzt_cache.update_one({"cache_key": "valorant_agents"}, {"$set": {"cache_key": "valorant_agents", "data": result, "expires_at": ea}}, upsert=True)
+        await db.lzt_cache.update_one({"cache_key": "valorant_agents_v2"}, {"$set": {"cache_key": "valorant_agents_v2", "data": result, "expires_at": ea}}, upsert=True)
         return result
     except Exception as e:
         logger.error(f"Valorant agents error: {e}")
@@ -382,6 +390,97 @@ async def get_lol_champions():
     except Exception as e:
         logger.error(f"LoL champions error: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch champions")
+
+@api_router.get("/lol/skins-all")
+async def get_lol_skins_all():
+    """Community Dragon: real LoL skin names map { skinId: {name, splash} }."""
+    cached = await db.lzt_cache.find_one({"cache_key": "lol_skins_all_cd"}, {"_id": 0})
+    if cached and cached.get("data"):
+        return cached["data"]
+    try:
+        resp = await val_http.get("https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json")
+        resp.raise_for_status()
+        raw = resp.json()
+        skins = {}
+        for sid, s in raw.items():
+            try:
+                int(sid)  # validate
+                name = s.get("name", "")
+                # CommunityDragon image path
+                splash = s.get("splashPath", "") or s.get("tilePath", "")
+                if splash.startswith("/lol-game-data/assets"):
+                    splash = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default" + splash.lower().replace("/lol-game-data/assets", "")
+                skins[sid] = {"name": name, "splash": splash, "isBase": s.get("isBase", False)}
+            except Exception:
+                continue
+        result = {"skins": skins, "count": len(skins)}
+        ea = datetime.now(timezone.utc) + timedelta(seconds=CACHE_TTL_SKINS)
+        await db.lzt_cache.update_one({"cache_key": "lol_skins_all_cd"}, {"$set": {"cache_key": "lol_skins_all_cd", "data": result, "expires_at": ea}}, upsert=True)
+        return result
+    except Exception as e:
+        logger.error(f"LoL skins-all error: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch LoL skins")
+
+# ======================== LIVE STATS + FEATURED ========================
+
+@api_router.get("/stats/live")
+async def get_live_stats():
+    """Live counters sampled from most recent cached market search responses."""
+    stats = {"valorant": {"total": 0, "min_price": 0, "max_price": 0}, "lol": {"total": 0, "min_price": 0, "max_price": 0}, "updated_at": datetime.now(timezone.utc).isoformat()}
+    for cat in ("valorant", "lol"):
+        cursor = db.lzt_cache.find({"cache_key": {"$regex": f"^search:{cat}:"}}, {"_id": 0, "data": 1}).sort("expires_at", -1).limit(1)
+        async for c in cursor:
+            d = c.get("data", {})
+            stats[cat]["total"] = d.get("totalItems", 0)
+            items = d.get("items", [])
+            prices = [i.get("price", 0) for i in items if i.get("price")]
+            if prices:
+                stats[cat]["min_price"] = round(min(prices), 2)
+                stats[cat]["max_price"] = round(max(prices), 2)
+    # Fallback: if nothing cached, do a light live fetch
+    if stats["valorant"]["total"] == 0 and LZT_TOKEN:
+        try:
+            resp = await http_client.get(f"{LZT_BASE_URL}/riot", params={"pmax": 1000, "currency": "usd"})
+            if resp.status_code == 200:
+                d = resp.json()
+                stats["valorant"]["total"] = d.get("totalItems", 0)
+        except Exception:
+            pass
+    return stats
+
+@api_router.get("/featured/{category}")
+async def get_featured(category: str):
+    """Featured accounts: top items by skin count or inventory value from cache."""
+    if category not in ("valorant", "lol"):
+        raise HTTPException(status_code=400, detail="Invalid category")
+    settings = await get_settings()
+    cursor = db.lzt_cache.find({"cache_key": {"$regex": f"^search:{category}:"}}, {"_id": 0, "data": 1}).sort("expires_at", -1).limit(3)
+    all_items = []
+    async for c in cursor:
+        all_items.extend(c.get("data", {}).get("items", []))
+    if not all_items and LZT_TOKEN:
+        try:
+            resp = await http_client.get(f"{LZT_BASE_URL}/riot", params={"pmax": 1000, "currency": "usd"})
+            if resp.status_code == 200:
+                all_items = resp.json().get("items", [])
+        except Exception:
+            pass
+    # Dedupe
+    seen = set(); unique = []
+    for it in all_items:
+        iid = it.get("item_id")
+        if iid and iid not in seen:
+            seen.add(iid); unique.append(it)
+    # Rank by value heuristic
+    if category == "valorant":
+        unique.sort(key=lambda x: (x.get("riot_valorant_skin_count", 0) * 10 + x.get("riot_valorant_knife_count", 0) * 100 + x.get("riot_valorant_wallet_vp", 0) / 100), reverse=True)
+    else:
+        unique.sort(key=lambda x: (x.get("riot_lol_skin_count", 0) * 10 + x.get("riot_lol_champion_count", 0)), reverse=True)
+    top = unique[:8]
+    # Apply commission
+    data = {"items": top, "totalItems": len(top)}
+    result = apply_commission(data, category, settings)
+    return result
 
 # ======================== LZT MARKET (generic fallback) ========================
 
@@ -474,6 +573,62 @@ def apply_item_commission(data):
         item["compare_price"] = round(final_price * 1.25, 2)
         item.pop("original_price", None)
     return data
+
+@api_router.get("/admin/analytics")
+async def admin_analytics(request: Request):
+    """Admin-only analytics: cache health, category breakdown, recent fetch stats."""
+    await check_admin(request)
+    # Cache entries
+    search_cache_count = await db.lzt_cache.count_documents({"cache_key": {"$regex": "^search:"}})
+    item_cache_count = await db.lzt_cache.count_documents({"cache_key": {"$regex": "^item:"}})
+    profile_cache_count = await db.lzt_cache.count_documents({"cache_key": {"$regex": "^profile:"}})
+    total_cache = await db.lzt_cache.count_documents({})
+    # Users/sessions/favorites/profiles
+    users_count = await db.users.count_documents({})
+    active_sessions = await db.user_sessions.count_documents({})
+    favorites_docs = await db.favorites.count_documents({})
+    profiles_count = await db.profiles.count_documents({})
+    # Category breakdown of profiles
+    val_profiles = await db.profiles.count_documents({"category": "valorant"})
+    lol_profiles = await db.profiles.count_documents({"category": "lol"})
+    # Simulate last 7 days trend by sampling recent cache expires
+    days_trend = []
+    now = datetime.now(timezone.utc)
+    for i in range(6, -1, -1):
+        day_start = now - timedelta(days=i+1)
+        day_end = now - timedelta(days=i)
+        # Count cache items whose expires_at falls in this range (proxy for activity)
+        count = await db.lzt_cache.count_documents({"expires_at": {"$gte": day_start, "$lt": day_end}})
+        days_trend.append({"day": day_start.strftime("%a"), "fetches": count})
+    # Latest live stats
+    val_search = await db.lzt_cache.find_one({"cache_key": {"$regex": "^search:valorant:"}}, {"_id": 0, "data.totalItems": 1, "expires_at": 1}, sort=[("expires_at", -1)])
+    lol_search = await db.lzt_cache.find_one({"cache_key": {"$regex": "^search:lol:"}}, {"_id": 0, "data.totalItems": 1, "expires_at": 1}, sort=[("expires_at", -1)])
+    return {
+        "cache": {"total": total_cache, "search": search_cache_count, "item": item_cache_count, "profile": profile_cache_count},
+        "users": {"total": users_count, "active_sessions": active_sessions, "with_favorites": favorites_docs},
+        "profiles": {"total": profiles_count, "valorant": val_profiles, "lol": lol_profiles},
+        "listings": {
+            "valorant": (val_search or {}).get("data", {}).get("totalItems", 0),
+            "lol": (lol_search or {}).get("data", {}).get("totalItems", 0),
+        },
+        "trend": days_trend,
+        "lzt_token_configured": bool(LZT_TOKEN),
+        "updated_at": now.isoformat(),
+    }
+
+@api_router.post("/admin/cache/clear")
+async def admin_clear_cache(request: Request):
+    """Admin-only: clear market cache to force fresh fetches."""
+    await check_admin(request)
+    body = await request.json() if request.headers.get("content-length") else {}
+    scope = body.get("scope", "search")  # search | item | profile | all
+    if scope == "all":
+        result = await db.lzt_cache.delete_many({})
+    elif scope in ("search", "item", "profile"):
+        result = await db.lzt_cache.delete_many({"cache_key": {"$regex": f"^{scope}:"}})
+    else:
+        raise HTTPException(status_code=400, detail="Invalid scope")
+    return {"deleted": result.deleted_count, "scope": scope}
 
 # ======================== HEALTH ========================
 @api_router.get("/")

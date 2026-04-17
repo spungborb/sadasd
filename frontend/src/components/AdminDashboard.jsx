@@ -1,16 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMe, fetchAdminSettings, updateAdminSettings, fetchProfiles, createProfile, deleteProfile } from '@/data/api';
-import { ArrowLeft, Save, Settings, Percent, Link, Plus, Trash2, Crosshair, Crown, Users, ShoppingBag, LayoutDashboard, Globe } from 'lucide-react';
+import { fetchMe, fetchAdminSettings, updateAdminSettings, fetchProfiles, createProfile, deleteProfile, fetchAdminAnalytics, clearAdminCache } from '@/data/api';
+import { Save, Settings, Percent, Link as LinkIcon, Plus, Trash2, Crosshair, Crown, ShoppingBag, LayoutDashboard, Globe, Database, RefreshCw, Activity, Users, TrendingUp, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
 
 const TABS = [
-  { id: 'profiles', label: 'Fetch Profiles', icon: Link },
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'profiles', label: 'Fetch Profiles', icon: LinkIcon },
   { id: 'pricing', label: 'Pricing', icon: Percent },
+  { id: 'sync', label: 'Sync Status', icon: Database },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
+
+function MetricCard({ icon: Icon, label, value, accent = '#ff4655', sub }) {
+  return (
+    <div className="p-5 rounded-xl bg-gradient-to-br from-zinc-900/70 to-zinc-950 border border-white/5 hover:border-white/10 transition-colors">
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}15`, border: `1px solid ${accent}30` }}>
+          <Icon className="w-4 h-4" style={{ color: accent }} />
+        </div>
+      </div>
+      <p className="text-2xl font-heading font-extrabold text-white tracking-tight">{value}</p>
+      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.18em] mt-1">{label}</p>
+      {sub && <p className="text-[10px] text-zinc-600 mt-1">{sub}</p>}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -21,13 +39,15 @@ export default function AdminDashboard() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [localSettings, setLocalSettings] = useState(null);
-  const [activeTab, setActiveTab] = useState('profiles');
+  const [activeTab, setActiveTab] = useState('overview');
   const [profiles, setProfiles] = useState([]);
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState('valorant');
   const [newUrl, setNewUrl] = useState('');
   const [creating, setCreating] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [analytics, setAnalytics] = useState(null);
+  const [clearing, setClearing] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -37,10 +57,15 @@ export default function AdminDashboard() {
         if (!me.is_admin) { setError('Admin access required.'); setLoading(false); return; }
         const [s, p] = await Promise.all([fetchAdminSettings(), fetchProfiles()]);
         setSettings(s); setLocalSettings(s); setProfiles(p.profiles || []);
+        fetchAdminAnalytics().then(setAnalytics).catch(() => {});
       } catch (e) { setError(e.message); }
       finally { setLoading(false); }
     })();
   }, []);
+
+  const refreshAnalytics = async () => {
+    try { const a = await fetchAdminAnalytics(); setAnalytics(a); } catch {}
+  };
 
   const handleSave = async () => {
     setSaving(true); setSuccess(false);
@@ -67,13 +92,23 @@ export default function AdminDashboard() {
     catch (e) { setProfileError(e.message); }
   };
 
+  const handleClearCache = async (scope) => {
+    setClearing(scope);
+    try { await clearAdminCache(scope); await refreshAnalytics(); }
+    catch (e) { setProfileError(e.message); }
+    finally { setClearing(''); }
+  };
+
   if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center"><div className="w-8 h-8 border-2 border-valorant border-t-transparent rounded-full animate-spin" /></div>;
   if (error && !settings) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center"><div className="text-center"><p className="text-red-400">{error}</p><button onClick={() => navigate('/')} className="mt-4 text-sm text-zinc-400 underline">Back</button></div></div>;
+
+  const showSaveBtn = ['pricing', 'profiles', 'settings'].includes(activeTab);
+  const PIE_COLORS = ['#ff4655', '#fbbf24', '#00e5ff', '#a78bfa', '#00e676'];
 
   return (
     <div className="min-h-screen bg-[#09090b] flex" data-testid="admin-dashboard">
       {/* Sidebar */}
-      <aside className="w-56 shrink-0 border-r border-white/5 bg-[#0d0d0f] flex flex-col">
+      <aside className="w-60 shrink-0 border-r border-white/5 bg-[#0d0d0f] flex flex-col">
         <div className="p-4 border-b border-white/5">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-valorant to-valorant/60 flex items-center justify-center"><Crosshair className="w-4 h-4 text-white" /></div>
@@ -83,7 +118,7 @@ export default function AdminDashboard() {
         <nav className="flex-1 p-3 space-y-1">
           {TABS.map(tab => (
             <button key={tab.id} data-testid={`admin-tab-${tab.id}`} onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white/5 text-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]'}`}>
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-valorant/10 text-white border border-valorant/20' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]'}`}>
               <tab.icon className="w-4 h-4" />{tab.label}
             </button>
           ))}
@@ -94,34 +129,128 @@ export default function AdminDashboard() {
         </nav>
         <div className="p-3 border-t border-white/5">
           <div className="flex items-center gap-2 px-2">
-            {user?.picture && <img src={user.picture} alt="" className="w-6 h-6 rounded-full" />}
+            {user?.picture && <img src={user.picture} alt="" className="w-6 h-6 rounded-full" onError={e => e.currentTarget.style.display='none'} />}
             <span className="text-xs text-zinc-400 truncate">{user?.email}</span>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* Main */}
       <main className="flex-1 overflow-y-auto">
         <div className="sticky top-0 z-10 border-b border-white/5 bg-[#09090b]/90 backdrop-blur-xl px-6 py-4 flex items-center justify-between">
           <h1 className="text-lg font-heading font-bold text-white capitalize">{TABS.find(t => t.id === activeTab)?.label}</h1>
           <div className="flex items-center gap-3">
             {success && <span className="text-xs text-emerald-400">Saved!</span>}
-            <button data-testid="admin-save-btn" onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-5 py-2 bg-valorant text-white font-semibold text-sm rounded-lg hover:bg-valorant-hover disabled:opacity-50 transition-all"><Save className="w-4 h-4" />{saving ? 'Saving...' : 'Save'}</button>
+            {activeTab === 'overview' && (
+              <button data-testid="refresh-analytics-btn" onClick={refreshAnalytics} className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-white/10 text-zinc-300 text-sm rounded-lg hover:bg-zinc-800 hover:text-white transition-all">
+                <RefreshCw className="w-3.5 h-3.5" />Refresh
+              </button>
+            )}
+            {showSaveBtn && (
+              <button data-testid="admin-save-btn" onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-5 py-2 bg-valorant text-white font-semibold text-sm rounded-lg hover:bg-valorant-hover disabled:opacity-50 transition-all">
+                <Save className="w-4 h-4" />{saving ? 'Saving...' : 'Save'}
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+        <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+          {/* ===== OVERVIEW TAB ===== */}
+          {activeTab === 'overview' && (
+            <>
+              {!analytics ? (
+                <div className="p-10 flex items-center justify-center text-zinc-500">Loading analytics...</div>
+              ) : (
+                <>
+                  {/* LZT Token Alert */}
+                  {!analytics.lzt_token_configured && (
+                    <div data-testid="token-alert" className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-amber-300">LZT Market token not configured</p>
+                        <p className="text-xs text-amber-300/60 mt-0.5">Add LZT_MARKET_TOKEN to backend/.env to enable live listings.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Metric cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <MetricCard icon={Crosshair} label="Valorant Listings" value={analytics.listings.valorant.toLocaleString()} accent="#ff4655" />
+                    <MetricCard icon={Crown} label="LoL Listings" value={analytics.listings.lol.toLocaleString()} accent="#fbbf24" />
+                    <MetricCard icon={Users} label="Registered Users" value={analytics.users.total} accent="#00e5ff" sub={`${analytics.users.active_sessions} active`} />
+                    <MetricCard icon={LinkIcon} label="Fetch Profiles" value={analytics.profiles.total} accent="#a78bfa" sub={`${analytics.profiles.valorant} VAL · ${analytics.profiles.lol} LoL`} />
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Trend chart */}
+                    <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-heading font-bold text-white flex items-center gap-2"><TrendingUp className="w-4 h-4 text-electric" />7-Day Fetch Activity</h3>
+                      </div>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart data={analytics.trend}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                          <XAxis dataKey="day" stroke="#52525b" fontSize={10} />
+                          <YAxis stroke="#52525b" fontSize={10} />
+                          <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+                          <Line type="monotone" dataKey="fetches" stroke="#ff4655" strokeWidth={2} dot={{ fill: '#ff4655', r: 3 }} activeDot={{ r: 5 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Cache breakdown pie */}
+                    <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-heading font-bold text-white flex items-center gap-2"><Database className="w-4 h-4 text-purple-400" />Cache Breakdown</h3>
+                        <span className="text-xs text-zinc-500">{analytics.cache.total} entries</span>
+                      </div>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie data={[
+                            { name: 'Search', value: analytics.cache.search },
+                            { name: 'Item', value: analytics.cache.item },
+                            { name: 'Profile', value: analytics.cache.profile },
+                            { name: 'Other', value: Math.max(0, analytics.cache.total - analytics.cache.search - analytics.cache.item - analytics.cache.profile) },
+                          ]} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} paddingAngle={3}>
+                            {PIE_COLORS.map((c, i) => <Cell key={i} fill={c} />)}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Listings bar chart */}
+                  <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5">
+                    <h3 className="text-sm font-heading font-bold text-white mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-valorant" />Listings by Category</h3>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={[
+                        { category: 'Valorant', listings: analytics.listings.valorant },
+                        { category: 'LoL', listings: analytics.listings.lol },
+                      ]}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                        <XAxis dataKey="category" stroke="#52525b" fontSize={11} />
+                        <YAxis stroke="#52525b" fontSize={10} />
+                        <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+                        <Bar dataKey="listings" fill="#ff4655" radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </>
+              )}
+            </>
+          )}
 
           {/* ===== PROFILES TAB ===== */}
           {activeTab === 'profiles' && (
             <>
-              {/* Base/Default URLs integrated at top of profile list */}
               <div className="p-5 rounded-xl bg-zinc-900/40 border border-valorant/20 space-y-4">
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-valorant" />
                   <h3 className="text-sm font-heading font-bold text-white">Default "All" Category URLs</h3>
                 </div>
-                <p className="text-xs text-zinc-500">These URLs filter the main "All" tab for each game. Use them to exclude phishing/unwanted accounts from the default view.</p>
+                <p className="text-xs text-zinc-500">These URLs filter the main "All" tab for each game. Use them to exclude unwanted origins from the default view.</p>
                 <div className="space-y-3">
                   <div>
                     <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1 block">All Valorant</label>
@@ -133,12 +262,11 @@ export default function AdminDashboard() {
                     <input data-testid="base-url-lol" type="text" placeholder="https://lzt.market/riot?not_origin[]=phishing&..." value={localSettings?.base_urls?.lol || ''} onChange={e => setLocalSettings(p => ({...p, base_urls:{...(p.base_urls||{}), lol: e.target.value}}))}
                       className="w-full px-3 py-2 bg-zinc-800/60 border border-zinc-700/50 rounded-lg text-xs text-white font-mono placeholder:text-zinc-600 focus:outline-none focus:border-valorant/40" />
                   </div>
-              </div>
+                </div>
               </div>
 
               <Separator className="bg-white/5" />
 
-              {/* Add profile form */}
               <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5 space-y-3">
                 <h3 className="text-sm font-heading font-bold text-white">Add Profile</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -157,7 +285,6 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Profile list */}
               {profiles.filter(p => p.category === 'valorant').length > 0 && (
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Crosshair className="w-3.5 h-3.5 text-valorant" />Valorant</h3>
@@ -187,7 +314,7 @@ export default function AdminDashboard() {
           {/* ===== PRICING TAB ===== */}
           {activeTab === 'pricing' && (
             <div className="space-y-6">
-              <p className="text-xs text-zinc-500">Configure commission markup per category. 100% = Price x 2.</p>
+              <p className="text-xs text-zinc-500">Configure commission markup per category. 100% = Price × 2.</p>
               {['valorant','lol'].map(cat => (
                 <div key={cat} className="p-5 rounded-xl bg-zinc-900/40 border border-white/5 space-y-3">
                   <div className="flex items-center justify-between">
@@ -203,6 +330,79 @@ export default function AdminDashboard() {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* ===== SYNC STATUS TAB ===== */}
+          {activeTab === 'sync' && (
+            <>
+              {!analytics ? <div className="p-10 text-center text-zinc-500">Loading...</div> : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5">
+                      <div className="flex items-center gap-2 mb-2">
+                        {analytics.lzt_token_configured ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-red-400" />}
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">LZT Token</span>
+                      </div>
+                      <p className={`text-lg font-heading font-bold ${analytics.lzt_token_configured ? 'text-emerald-400' : 'text-red-400'}`}>{analytics.lzt_token_configured ? 'Connected' : 'Not Configured'}</p>
+                    </div>
+                    <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Database className="w-4 h-4 text-electric" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">Total Cache</span>
+                      </div>
+                      <p className="text-lg font-heading font-bold text-white">{analytics.cache.total} <span className="text-xs text-zinc-500 font-normal">entries</span></p>
+                    </div>
+                    <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <RefreshCw className="w-4 h-4 text-valorant" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">Last Updated</span>
+                      </div>
+                      <p className="text-sm font-semibold text-white">{new Date(analytics.updated_at).toLocaleTimeString()}</p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">{new Date(analytics.updated_at).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl bg-zinc-900/40 border border-white/5 space-y-4">
+                    <h3 className="text-sm font-heading font-bold text-white">Quick Actions</h3>
+                    <p className="text-xs text-zinc-500">Force fresh fetches by clearing specific cache scopes.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button data-testid="clear-search-cache-btn" onClick={() => handleClearCache('search')} disabled={clearing === 'search'}
+                        className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/60 border border-white/5 hover:bg-zinc-800 hover:border-valorant/30 transition-all group">
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-white">Clear Search Cache</p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">{analytics.cache.search} entries</p>
+                        </div>
+                        <RefreshCw className={`w-4 h-4 text-zinc-500 group-hover:text-valorant ${clearing === 'search' ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button data-testid="clear-item-cache-btn" onClick={() => handleClearCache('item')} disabled={clearing === 'item'}
+                        className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/60 border border-white/5 hover:bg-zinc-800 hover:border-valorant/30 transition-all group">
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-white">Clear Item Cache</p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">{analytics.cache.item} entries</p>
+                        </div>
+                        <RefreshCw className={`w-4 h-4 text-zinc-500 group-hover:text-valorant ${clearing === 'item' ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button data-testid="clear-profile-cache-btn" onClick={() => handleClearCache('profile')} disabled={clearing === 'profile'}
+                        className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/60 border border-white/5 hover:bg-zinc-800 hover:border-valorant/30 transition-all group">
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-white">Clear Profile Cache</p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">{analytics.cache.profile} entries</p>
+                        </div>
+                        <RefreshCw className={`w-4 h-4 text-zinc-500 group-hover:text-valorant ${clearing === 'profile' ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button data-testid="clear-all-cache-btn" onClick={() => handleClearCache('all')} disabled={clearing === 'all'}
+                        className="flex items-center justify-between p-3 rounded-lg bg-red-500/5 border border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 transition-all group">
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-red-300">Clear ALL Cache</p>
+                          <p className="text-[10px] text-red-300/60 mt-0.5">Destructive · forces full refresh</p>
+                        </div>
+                        <Trash2 className={`w-4 h-4 text-red-400 ${clearing === 'all' ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           {/* ===== SETTINGS TAB ===== */}

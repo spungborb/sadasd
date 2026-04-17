@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, GitCompare, Crosshair, Crown } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import FilterSidebar from '@/components/FilterSidebar';
+import FilterPanel from '@/components/FilterPanel';
 import ProductGrid from '@/components/ProductGrid';
 import LztPreviewModal from '@/components/LztPreviewModal';
 import CompareModal from '@/components/CompareModal';
@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(location.state?.user || null);
   const [products, setProducts] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(location.state?.openItem || null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,7 +26,7 @@ export default function Dashboard() {
 
   // Profile system
   const [profiles, setProfiles] = useState([]);
-  const [activeCategory, setActiveCategory] = useState('valorant'); // 'valorant' or 'lol'
+  const [activeCategory, setActiveCategory] = useState(location.state?.initialCategory || 'valorant'); // 'valorant' or 'lol'
   const [activeProfileId, setActiveProfileId] = useState(null); // null = "All" generic search
 
   useEffect(() => {
@@ -150,7 +150,7 @@ export default function Dashboard() {
           {!activeProfileId && (
             <div className="hidden lg:block lg:col-span-3">
               <div className="sticky top-52">
-                <FilterSidebar filters={filters} onFilterChange={handleFilterChange} onReset={resetFilters} resultCount={totalItems} category={activeCategory} />
+                <FilterPanel filters={filters} onFilterChange={handleFilterChange} onReset={resetFilters} resultCount={totalItems} category={activeCategory} />
               </div>
             </div>
           )}
@@ -190,7 +190,7 @@ export default function Dashboard() {
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileFiltersOpen(false)} />
           <motion.div initial={{x:'-100%'}} animate={{x:0}} exit={{x:'-100%'}} transition={{type:'spring',damping:25,stiffness:200}} className="absolute left-0 top-0 bottom-0 w-[85%] max-w-sm bg-[#09090b] border-r border-white/10 overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-white/5"><h2 className="text-lg font-heading font-bold text-white">Filters</h2><button data-testid="close-mobile-filters" onClick={() => setMobileFiltersOpen(false)} className="p-1 text-zinc-400 hover:text-white"><X className="w-5 h-5" /></button></div>
-            <div className="p-4"><FilterSidebar filters={filters} onFilterChange={handleFilterChange} onReset={resetFilters} resultCount={totalItems} category={activeCategory} /></div>
+            <div className="p-4"><FilterPanel filters={filters} onFilterChange={handleFilterChange} onReset={resetFilters} resultCount={totalItems} category={activeCategory} /></div>
           </motion.div>
         </motion.div>
       )}</AnimatePresence>

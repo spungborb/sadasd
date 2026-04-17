@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { X, ShieldCheck, ShieldAlert, Crosshair, Sparkles, Star, Clock, TrendingUp, Swords, Gem, Eye, Heart, Gamepad2, Globe, Users, Tag, Loader2, Crown, Trophy, Coins, CircleDollarSign, ExternalLink } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { getValorantRankName, getRankColorFromInt, getOriginLabel, getOriginColor, isLocalFavorite, toggleLocalFavorite, fetchMarketItem, fetchValorantSkins, fetchValorantAgents, fetchLolChampions, getCurrencySymbol, addServerFavorite, removeServerFavorite } from '@/data/api';
+import { getValorantRankName, getRankColorFromInt, isLocalFavorite, toggleLocalFavorite, fetchMarketItem, fetchValorantSkins, fetchValorantAgents, fetchLolChampions, fetchLolSkinsAll, getCurrencySymbol, addServerFavorite, removeServerFavorite, sortSkinsByValue, formatCompact } from '@/data/api';
 
 const TIER_COLORS = { Deluxe:'from-emerald-800 to-emerald-950 border-emerald-500/30', Premium:'from-purple-800 to-purple-950 border-purple-500/30', Select:'from-zinc-700 to-zinc-800 border-zinc-500/30', Ultra:'from-amber-800 to-amber-950 border-amber-500/30', Exclusive:'from-red-800 to-red-950 border-valorant/30', Standard:'from-zinc-800 to-zinc-900 border-zinc-600/30' };
 const LOL_RANK_COLORS = { IRON:'#8c8c8c', BRONZE:'#b87333', SILVER:'#c0c0c0', GOLD:'#ffd700', PLATINUM:'#00bcd4', EMERALD:'#00e676', DIAMOND:'#b388ff', MASTER:'#9d4dbb', GRANDMASTER:'#ff4655', CHALLENGER:'#ffe57f' };
@@ -70,6 +70,7 @@ export default function LztPreviewModal({ product, category, onClose }) {
   const [allSkins, setAllSkins] = useState([]);
   const [allAgents, setAllAgents] = useState([]);
   const [lolChampData, setLolChampData] = useState(null);
+  const [lolSkinsAll, setLolSkinsAll] = useState(null);
   const [skinsLoading, setSkinsLoading] = useState(true);
 
   useEffect(() => {
@@ -83,7 +84,10 @@ export default function LztPreviewModal({ product, category, onClose }) {
         fetchValorantAgents().then(d => setAllAgents(d.agents || [])),
       ]).catch(() => {}).finally(() => setSkinsLoading(false));
     } else if (category === 'lol') {
-      fetchLolChampions().then(d => setLolChampData(d)).catch(() => {}).finally(() => setSkinsLoading(false));
+      Promise.all([
+        fetchLolChampions().then(d => setLolChampData(d)),
+        fetchLolSkinsAll().then(d => setLolSkinsAll(d.skins || {})).catch(() => setLolSkinsAll({})),
+      ]).catch(() => {}).finally(() => setSkinsLoading(false));
     } else {
       setSkinsLoading(false);
     }
@@ -92,7 +96,6 @@ export default function LztPreviewModal({ product, category, onClose }) {
   const item = detailedItem || product;
   const isVal = category === 'valorant';
   const isLol = category === 'lol';
-  const origin = item.item_origin || '';
   const cs = getCurrencySymbol(item.price_currency);
   const publishedDate = item.published_date ? new Date(item.published_date * 1000) : null;
 
@@ -140,13 +143,14 @@ export default function LztPreviewModal({ product, category, onClose }) {
   const opggUrl = isLol ? buildOpggUrl(item) : null;
   const uggUrl = isLol ? buildUggUrl(item) : null;
 
-  // Valorant: match actual skin inventory by UUID
+  // Valorant: match actual skin inventory by UUID + sort by tier value (Exclusive → Standard)
   const matchedSkins = useMemo(() => {
     if (!isVal || allSkins.length === 0) return [];
     const inv = item.valorantInventory || detailedItem?.valorantInventory;
     if (!inv?.WeaponSkins) return [];
     const uuids = new Set(Array.isArray(inv.WeaponSkins) ? inv.WeaponSkins : Object.values(inv.WeaponSkins));
-    return allSkins.filter(s => uuids.has(s.uuid));
+    const matched = allSkins.filter(s => uuids.has(s.uuid));
+    return sortSkinsByValue(matched);
   }, [item, detailedItem, allSkins, isVal]);
 
   // Valorant: match actual agents
@@ -166,7 +170,7 @@ export default function LztPreviewModal({ product, category, onClose }) {
     return inv.Champion.map(key => lolChampData.champions?.[String(key)]).filter(Boolean).slice(0, 40);
   }, [item, detailedItem, lolChampData, isLol]);
 
-  // LoL: match skins
+  // LoL: match skins — use CommunityDragon skin_id map for REAL names (not just champion name)
   const matchedLolSkins = useMemo(() => {
     if (!isLol || !lolChampData) return [];
     const inv = item.lolInventory || detailedItem?.lolInventory;
@@ -178,9 +182,15 @@ export default function LztPreviewModal({ product, category, onClose }) {
       const skinNum = id % 1000;
       const champ = lolChampData.champions?.[champKey];
       if (!champ) return null;
-      return { name: `${champ.name} #${skinNum}`, splash: `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${champ.id}_${skinNum}.jpg`, champName: champ.name };
-    }).filter(Boolean).slice(0, 30);
-  }, [item, detailedItem, lolChampData, isLol]);
+      // Prefer real skin name from Community Dragon map
+      const real = lolSkinsAll?.[String(id)];
+      const displayName = (real?.name && real.name.toLowerCase() !== champ.name.toLowerCase())
+        ? real.name
+        : (skinNum === 0 ? `${champ.name} (Classic)` : `${champ.name} Skin ${skinNum}`);
+      const splash = `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${champ.id}_${skinNum}.jpg`;
+      return { name: displayName, splash, champName: champ.name, skinId: id };
+    }).filter(Boolean).slice(0, 40);
+  }, [item, detailedItem, lolChampData, lolSkinsAll, isLol]);
 
   const handleFav = () => { const nf = toggleLocalFavorite(product.item_id); setFav(nf.includes(product.item_id)); addServerFavorite(product.item_id).catch(() => {}); };
 
@@ -200,7 +210,6 @@ export default function LztPreviewModal({ product, category, onClose }) {
               <div className="flex items-end justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    {origin && <Badge className={`text-[10px] border ${getOriginColor(origin)}`}>{getOriginLabel(origin)}</Badge>}
                     {region && <Badge className="text-[10px] bg-zinc-800/80 text-zinc-300 border-zinc-700/50">{region}</Badge>}
                     {item.nsb === 1 && <Badge className="text-[10px] bg-electric/10 text-electric border-electric/30">NSB</Badge>}
                   </div>
@@ -260,6 +269,17 @@ export default function LztPreviewModal({ product, category, onClose }) {
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/60 border border-white/5"><Gamepad2 className="w-4 h-4 text-zinc-500" /><div><p className="text-xs text-zinc-500">Agents</p><p className="text-sm font-semibold text-white">{agentCount}</p></div></div>
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/60 border border-white/5"><Swords className="w-4 h-4 text-zinc-500" /><div><p className="text-xs text-zinc-500">Knives</p><p className="text-sm font-semibold text-white">{knifeCount}</p></div></div>
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/60 border border-white/5"><Sparkles className="w-4 h-4 text-zinc-500" /><div><p className="text-xs text-zinc-500">Skins</p><p className="text-sm font-semibold text-white">{valSkinCount}</p></div></div>
+                </div>
+                {/* Total Wallet highlight */}
+                <div data-testid="val-wallet-totals" className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-500/20">
+                    <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center"><Gem className="w-4 h-4 text-purple-300" /></div><div><p className="text-[10px] font-bold uppercase tracking-widest text-purple-300/70">Total VP</p><p className="text-lg font-heading font-extrabold text-white">{formatCompact(vp)}</p></div></div>
+                    <span className="text-[10px] text-purple-300/50 font-mono">{vp.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/20">
+                    <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center"><Sparkles className="w-4 h-4 text-amber-300" /></div><div><p className="text-[10px] font-bold uppercase tracking-widest text-amber-300/70">Total RP</p><p className="text-lg font-heading font-extrabold text-white">{formatCompact(rp)}</p></div></div>
+                    <span className="text-[10px] text-amber-300/50 font-mono">{rp.toLocaleString()}</span>
+                  </div>
                 </div>
               </>
             )}
@@ -332,8 +352,8 @@ export default function LztPreviewModal({ product, category, onClose }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {matchedLolSkins.map((s,i) => (
                     <div key={i} className="rounded-lg overflow-hidden bg-zinc-800 border border-white/5 hover:scale-[1.02] transition-transform">
-                      <img src={s.splash} alt={s.name} className="w-full h-20 object-cover" loading="lazy" />
-                      <div className="p-2"><p className="text-xs font-heading font-bold text-white truncate">{s.name}</p><p className="text-[9px] text-zinc-400">{s.champName}</p></div>
+                      <img src={s.splash} alt={s.name} onError={e => { e.currentTarget.style.display = 'none'; }} className="w-full h-20 object-cover" loading="lazy" />
+                      <div className="p-2"><p className="text-xs font-heading font-bold text-white truncate" title={s.name}>{s.name}</p><p className="text-[9px] text-zinc-400">{s.champName}</p></div>
                     </div>
                   ))}
                 </div>

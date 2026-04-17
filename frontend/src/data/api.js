@@ -20,6 +20,16 @@ export async function fetchMarketItem(id) {
   if (!resp.ok) throw new Error(`API error: ${resp.status}`);
   return resp.json();
 }
+export async function fetchLiveStats() {
+  const resp = await fetch(`${API}/stats/live`);
+  if (!resp.ok) throw new Error('stats error');
+  return resp.json();
+}
+export async function fetchFeatured(category) {
+  const resp = await fetch(`${API}/featured/${category}`);
+  if (!resp.ok) throw new Error('featured error');
+  return resp.json();
+}
 
 // ==================== PROFILES ====================
 export async function fetchProfiles() {
@@ -67,6 +77,16 @@ export async function updateAdminSettings(data) {
   if (!resp.ok) throw new Error(`Error: ${resp.status}`);
   return resp.json();
 }
+export async function fetchAdminAnalytics() {
+  const resp = await fetch(`${API}/admin/analytics`, { credentials: 'include' });
+  if (!resp.ok) throw new Error(`Error: ${resp.status}`);
+  return resp.json();
+}
+export async function clearAdminCache(scope = 'search') {
+  const resp = await fetch(`${API}/admin/cache/clear`, { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ scope }) });
+  if (!resp.ok) throw new Error(`Error: ${resp.status}`);
+  return resp.json();
+}
 
 // ==================== FAVORITES ====================
 const FAV_KEY = 'lzt_vault_favorites';
@@ -82,11 +102,56 @@ export async function removeServerFavorite(id) { await fetch(`${API}/favorites/$
 export async function fetchValorantSkins() { const resp = await fetch(`${API}/valorant/skins`); if (!resp.ok) throw new Error('Failed'); return resp.json(); }
 export async function fetchValorantAgents() { const resp = await fetch(`${API}/valorant/agents`); if (!resp.ok) throw new Error('Failed'); return resp.json(); }
 export async function fetchLolChampions() { const resp = await fetch(`${API}/lol/champions`); if (!resp.ok) throw new Error('Failed'); return resp.json(); }
+export async function fetchLolSkinsAll() { const resp = await fetch(`${API}/lol/skins-all`); if (!resp.ok) throw new Error('Failed'); return resp.json(); }
 
 // ==================== RANK HELPERS ====================
 const VALORANT_RANKS = {0:'Unranked',3:'Iron 1',4:'Iron 2',5:'Iron 3',6:'Bronze 1',7:'Bronze 2',8:'Bronze 3',9:'Silver 1',10:'Silver 2',11:'Silver 3',12:'Gold 1',13:'Gold 2',14:'Gold 3',15:'Platinum 1',16:'Platinum 2',17:'Platinum 3',18:'Diamond 1',19:'Diamond 2',20:'Diamond 3',21:'Ascendant 1',22:'Ascendant 2',23:'Ascendant 3',24:'Immortal 1',25:'Immortal 2',26:'Immortal 3',27:'Radiant'};
 export function getValorantRankName(r) { return VALORANT_RANKS[r] || 'Unranked'; }
 export function getRankColorFromInt(r) { if(r<=2)return '#a1a1aa';if(r<=5)return '#8c8c8c';if(r<=8)return '#b87333';if(r<=11)return '#c0c0c0';if(r<=14)return '#ffd700';if(r<=17)return '#00bcd4';if(r<=20)return '#b388ff';if(r<=23)return '#00e676';if(r<=26)return '#ff4655';if(r===27)return '#ffe57f';return '#a1a1aa'; }
-export function getOriginLabel(o) { return {personal:'Personal',brute:'Brute',resale:'Resale',autoreg:'Auto-Reg',phishing:'Phish',stealer:'Stealer',dummy:'Dummy',self_registration:'Self-Reg'}[o]||o; }
-export function getOriginColor(o) { return {personal:'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',brute:'bg-red-500/20 text-red-400 border-red-500/30',resale:'bg-amber-500/20 text-amber-400 border-amber-500/30',autoreg:'bg-zinc-500/20 text-zinc-400 border-zinc-500/30',phishing:'bg-orange-500/20 text-orange-400 border-orange-500/30',stealer:'bg-rose-500/20 text-rose-400 border-rose-500/30'}[o]||'bg-zinc-500/20 text-zinc-400 border-zinc-500/30'; }
 export function getCurrencySymbol(c) { return {usd:'$',eur:'\u20AC',rub:'\u20BD',gbp:'\u00A3',cny:'\u00A5',try:'\u20BA'}[c]||'$'; }
+
+// ==================== TIER VALUE ORDER (Valorant skin sort) ====================
+// Exclusive > Ultra > Premium > Deluxe > Select > Standard
+export const SKIN_TIER_PRIORITY = { Exclusive: 6, Ultra: 5, Premium: 4, Deluxe: 3, Select: 2, Standard: 1 };
+export function sortSkinsByValue(skins) {
+  return [...skins].sort((a, b) => {
+    const ap = SKIN_TIER_PRIORITY[a?.tier] || 0;
+    const bp = SKIN_TIER_PRIORITY[b?.tier] || 0;
+    if (bp !== ap) return bp - ap;
+    return (a?.displayName || '').localeCompare(b?.displayName || '');
+  });
+}
+
+// ==================== ORIGIN / TAG BLACKLIST ====================
+// Internal scraping tags that must NEVER surface to buyers.
+const BLACKLISTED_ORIGINS = new Set(['brute','resale','personal','personel','autoreg','auto_reg','auto reg','aute reg','self_registration','self-registration']);
+export function isOriginBlacklisted(origin) {
+  if (!origin) return true; // treat missing as hidden
+  return BLACKLISTED_ORIGINS.has(String(origin).toLowerCase().trim());
+}
+// Re-exported no-ops kept for back-compat (components should not render origin)
+export function getOriginLabel() { return ''; }
+export function getOriginColor() { return ''; }
+
+// ==================== VP / RP CALCULATORS ====================
+export function getValorantWallet(item) {
+  return {
+    vp: Number(item?.riot_valorant_wallet_vp || 0),
+    rp: Number(item?.riot_valorant_wallet_rp || 0),
+    fa: Number(item?.riot_valorant_wallet_fa || 0),
+  };
+}
+export function getLolWallet(item) {
+  return {
+    be: Number(item?.riot_lol_wallet_blue || 0),
+    oe: Number(item?.riot_lol_wallet_orange || 0),
+    mythic: Number(item?.riot_lol_wallet_mythic || 0),
+    rp: Number(item?.riot_lol_wallet_riot || 0),
+  };
+}
+export function formatCompact(n) {
+  const num = Number(n) || 0;
+  if (num >= 1_000_000) return `${(num/1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num/1_000).toFixed(1)}K`;
+  return String(num);
+}

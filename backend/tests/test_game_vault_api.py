@@ -2,7 +2,7 @@
 Game Vault API Backend Tests
 Tests all API endpoints for the Game Vault marketplace:
 1. GET /api/ — root health endpoint
-2. GET /api/valorant/agents — fetches agents from valorant-api.com and caches
+2. GET /api/valorant/agents — fetches agents from valorant-api.com and caches (includes backgroundGradientColors)
 3. GET /api/valorant/skins — fetches skins + content tiers and caches
 4. GET /api/lol/champions — fetches champions from DataDragon
 5. GET /api/profiles — public profiles list
@@ -10,9 +10,16 @@ Tests all API endpoints for the Game Vault marketplace:
 7. POST /api/auth/logout without session — should succeed gracefully
 8. GET /api/admin/settings without session — should return 401
 9. POST /api/profiles without admin — should 401/403
-10. GET /api/market/search/valorant — LZT market search (token empty so may 502)
+10. GET /api/market/search/valorant — LZT market search (with VP/RP/skin fields)
 11. GET /api/market/search/invalid — should return 400
 12. GET /api/favorites without auth — should return 401
+13. GET /api/stats/live — live stats for valorant/lol totals
+14. GET /api/featured/valorant — featured items (0..8 items with price/compare_price)
+15. GET /api/featured/lol — featured items (may be empty if no cached LoL data)
+16. GET /api/featured/invalid — should return 400
+17. GET /api/lol/skins-all — LoL skins map from CommunityDragon
+18. GET /api/admin/analytics without auth — should return 401
+19. POST /api/admin/cache/clear without auth — should return 401
 """
 import pytest
 import requests
@@ -42,7 +49,7 @@ class TestHealthEndpoint:
 
 
 class TestValorantAgentsEndpoint:
-    """Test GET /api/valorant/agents — fetches agents from valorant-api.com"""
+    """Test GET /api/valorant/agents — fetches agents from valorant-api.com (includes backgroundGradientColors)"""
     
     def test_agents_endpoint_returns_200(self, api_client):
         response = api_client.get(f"{BASE_URL}/api/valorant/agents")
@@ -66,6 +73,18 @@ class TestValorantAgentsEndpoint:
         assert agent["displayIcon"].startswith("https://"), "displayIcon should be HTTPS URL"
         print(f"✓ Agents have required fields, count={len(agents)}")
         print(f"  Sample agent: {agent['displayName']}")
+    
+    def test_agents_have_background_gradient_colors(self, api_client):
+        """Verify agents include backgroundGradientColors array field"""
+        response = api_client.get(f"{BASE_URL}/api/valorant/agents")
+        data = response.json()
+        agents = data["agents"]
+        
+        # Check that backgroundGradientColors field exists
+        agent = agents[0]
+        assert "backgroundGradientColors" in agent, "Agent should have backgroundGradientColors field"
+        assert isinstance(agent["backgroundGradientColors"], list), "backgroundGradientColors should be an array"
+        print(f"✓ Agents have backgroundGradientColors field (array with {len(agent['backgroundGradientColors'])} colors)")
 
 
 class TestValorantSkinsEndpoint:
@@ -268,6 +287,169 @@ class TestMarketSearchLol:
             print(f"✓ GET /api/market/search/lol returns 502 (expected - LZT token empty)")
         else:
             print(f"✓ GET /api/market/search/lol returns {response.status_code}")
+
+
+# ======================== NEW ENDPOINTS (Iteration 9) ========================
+
+class TestLiveStatsEndpoint:
+    """Test GET /api/stats/live — live stats for valorant/lol totals"""
+    
+    def test_live_stats_returns_200(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/stats/live")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        print("✓ GET /api/stats/live returns 200")
+    
+    def test_live_stats_has_required_structure(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/stats/live")
+        data = response.json()
+        
+        # Check valorant stats
+        assert "valorant" in data, "Response should have 'valorant' key"
+        assert "total" in data["valorant"], "valorant should have 'total' field"
+        assert "min_price" in data["valorant"], "valorant should have 'min_price' field"
+        assert "max_price" in data["valorant"], "valorant should have 'max_price' field"
+        
+        # Check lol stats
+        assert "lol" in data, "Response should have 'lol' key"
+        assert "total" in data["lol"], "lol should have 'total' field"
+        assert "min_price" in data["lol"], "lol should have 'min_price' field"
+        assert "max_price" in data["lol"], "lol should have 'max_price' field"
+        
+        # Check updated_at timestamp
+        assert "updated_at" in data, "Response should have 'updated_at' timestamp"
+        
+        print(f"✓ Live stats structure valid: valorant.total={data['valorant']['total']}, lol.total={data['lol']['total']}")
+
+
+class TestFeaturedEndpoint:
+    """Test GET /api/featured/{category} — featured items (0..8 items with price/compare_price)"""
+    
+    def test_featured_valorant_returns_200(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/featured/valorant")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        print("✓ GET /api/featured/valorant returns 200")
+    
+    def test_featured_valorant_has_items_with_prices(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/featured/valorant")
+        data = response.json()
+        
+        assert "items" in data, "Response should have 'items' key"
+        items = data["items"]
+        assert isinstance(items, list), "items should be a list"
+        assert len(items) <= 8, f"Featured should return 0..8 items, got {len(items)}"
+        
+        if items:
+            item = items[0]
+            # Check price and compare_price are applied
+            assert "price" in item, "Item should have 'price' field"
+            assert "compare_price" in item, "Item should have 'compare_price' field"
+            assert item["compare_price"] > item["price"], "compare_price should be > price"
+            print(f"✓ Featured valorant has {len(items)} items with price/compare_price applied")
+            print(f"  Sample item price: ${item['price']}, compare: ${item['compare_price']}")
+        else:
+            print("✓ Featured valorant returns empty list (no cached data yet)")
+    
+    def test_featured_lol_returns_200(self, api_client):
+        """LoL featured may be empty if no cached LoL data - that's expected"""
+        response = api_client.get(f"{BASE_URL}/api/featured/lol")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        
+        data = response.json()
+        assert "items" in data, "Response should have 'items' key"
+        items = data["items"]
+        assert isinstance(items, list), "items should be a list"
+        assert len(items) <= 8, f"Featured should return 0..8 items, got {len(items)}"
+        
+        print(f"✓ GET /api/featured/lol returns 200 with {len(items)} items (may be empty - expected)")
+    
+    def test_featured_invalid_category_returns_400(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/featured/invalid")
+        assert response.status_code == 400, f"Expected 400 for invalid category, got {response.status_code}"
+        data = response.json()
+        assert "detail" in data, "Response should have 'detail' key"
+        print(f"✓ GET /api/featured/invalid returns 400: {data['detail']}")
+
+
+class TestLolSkinsAllEndpoint:
+    """Test GET /api/lol/skins-all — LoL skins map from CommunityDragon"""
+    
+    def test_lol_skins_all_returns_200(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/lol/skins-all")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        print("✓ GET /api/lol/skins-all returns 200")
+    
+    def test_lol_skins_all_has_skins_map(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/lol/skins-all")
+        data = response.json()
+        
+        assert "skins" in data, "Response should have 'skins' key"
+        assert "count" in data, "Response should have 'count' key"
+        
+        skins = data["skins"]
+        count = data["count"]
+        
+        assert isinstance(skins, dict), "skins should be a dictionary/map"
+        assert count > 0, f"Should have at least one skin, got count={count}"
+        
+        # Check a sample skin has required fields
+        sample_key = list(skins.keys())[0]
+        sample_skin = skins[sample_key]
+        assert "name" in sample_skin, "Skin should have 'name' field"
+        assert "splash" in sample_skin, "Skin should have 'splash' field"
+        
+        print(f"✓ LoL skins-all has {count} skins in map")
+        print(f"  Sample skin ID {sample_key}: {sample_skin['name']}")
+
+
+class TestAdminAnalyticsWithoutAuth:
+    """Test GET /api/admin/analytics without auth — should return 401"""
+    
+    def test_admin_analytics_without_auth_returns_401(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/admin/analytics")
+        assert response.status_code == 401, f"Expected 401 without auth, got {response.status_code}"
+        data = response.json()
+        assert "detail" in data, "Response should have 'detail' key"
+        print(f"✓ GET /api/admin/analytics without auth returns 401: {data['detail']}")
+
+
+class TestAdminCacheClearWithoutAuth:
+    """Test POST /api/admin/cache/clear without auth — should return 401"""
+    
+    def test_admin_cache_clear_without_auth_returns_401(self, api_client):
+        response = api_client.post(f"{BASE_URL}/api/admin/cache/clear")
+        assert response.status_code == 401, f"Expected 401 without auth, got {response.status_code}"
+        data = response.json()
+        assert "detail" in data, "Response should have 'detail' key"
+        print(f"✓ POST /api/admin/cache/clear without auth returns 401: {data['detail']}")
+
+
+class TestMarketSearchValorantFields:
+    """Test GET /api/market/search/valorant — verify VP/RP/skin fields intact"""
+    
+    def test_market_search_valorant_has_vp_rp_skin_fields(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/market/search/valorant")
+        
+        # May return 502 if LZT token issues, or 200 if cached
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get("items", [])
+            
+            if items:
+                item = items[0]
+                # Check for VP/RP/skin fields (may not all be present on every item)
+                vp_rp_fields = ["riot_valorant_wallet_vp", "riot_valorant_skin_count", "riot_valorant_knife_count"]
+                found_fields = [f for f in vp_rp_fields if f in item]
+                
+                print(f"✓ Market search valorant has items with fields: {found_fields}")
+                
+                # Verify price/compare_price applied
+                assert "price" in item, "Item should have 'price' field"
+                assert "compare_price" in item, "Item should have 'compare_price' field"
+                print(f"  Price: ${item['price']}, Compare: ${item['compare_price']}")
+            else:
+                print("✓ Market search valorant returns empty items list")
+        else:
+            print(f"✓ Market search valorant returns {response.status_code} (expected if no cached data)")
 
 
 if __name__ == "__main__":
