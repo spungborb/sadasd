@@ -1,0 +1,128 @@
+{
+  "project_name": "LZT Market Prototype - Valorant Edition",
+  "theme": "dark",
+  "archetype": "7 (Electric & Neon) with 5 (Jewel & Luxury) undertones",
+  "typography": {
+    "headings": {
+      "font_family": "Outfit",
+      "weights": ["600", "700", "800"],
+      "tracking": "tracking-tight",
+      "import_url": "https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap"
+    },
+    "body": {
+      "font_family": "Manrope",
+      "weights": ["400", "500", "600"],
+      "import_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tighter uppercase",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "body": "text-sm md:text-base text-zinc-400",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-[#ff4655]"
+    }
+  },
+  "colors": {
+    "background": "#09090b",
+    "surface": "#18181b",
+    "surface_glass": "rgba(24, 24, 27, 0.6)",
+    "primary": "#ff4655",
+    "primary_hover": "#ff5b68",
+    "secondary": "#00e5ff",
+    "text_primary": "#ffffff",
+    "text_secondary": "#a1a1aa",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "success": "#10b981",
+    "warning": "#f59e0b",
+    "danger": "#ef4444"
+  },
+  "effects": {
+    "glassmorphism": {
+      "classes": "backdrop-blur-xl bg-zinc-900/60 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+      "usage": "Modals, Sidebars, Floating Navigation, Detailed Product Preview"
+    },
+    "neon_glow": {
+      "primary": "drop-shadow-[0_0_8px_rgba(255,70,85,0.6)]",
+      "secondary": "drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]",
+      "button_hover": "shadow-[0_0_20px_rgba(255,70,85,0.4)] border-[#ff4655]"
+    },
+    "card_hover": "transition-all duration-300 hover:-translate-y-1 hover:border-[#ff4655]/50 hover:shadow-[0_8px_30px_rgba(255,70,85,0.15)]",
+    "skeleton_shimmer": "animate-pulse bg-zinc-800 rounded"
+  },
+  "components": {
+    "main_dashboard": {
+      "layout": "grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 md:p-8",
+      "sidebar": "col-span-1 lg:col-span-3 sticky top-8 h-fit backdrop-blur-xl bg-zinc-900/60 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-6 rounded-xl",
+      "product_grid": "col-span-1 lg:col-span-9 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6"
+    },
+    "filter_sidebar": {
+      "style": "glassmorphism",
+      "elements": "Range sliders with #ff4655 accent, custom toggle switches, level/rank select dropdowns",
+      "spacing": "space-y-8"
+    },
+    "account_card": {
+      "wrapper": "bg-zinc-900 border border-white/5 rounded-xl overflow-hidden group cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:border-[#ff4655]/50 hover:shadow-[0_8px_30px_rgba(255,70,85,0.15)] relative",
+      "image_container": "h-40 w-full relative overflow-hidden bg-zinc-950",
+      "image_overlay": "absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent z-10",
+      "content": "p-5 relative z-20",
+      "badges": "absolute top-3 right-3 z-30 flex gap-2",
+      "stats_row": "flex justify-between items-center mt-4 pt-4 border-t border-white/5 text-sm"
+    },
+    "detailed_preview_modal": {
+      "wrapper": "fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6",
+      "overlay": "absolute inset-0 bg-black/80 backdrop-blur-sm",
+      "content": "relative w-full max-w-5xl max-h-[90vh] overflow-y-auto backdrop-blur-xl bg-zinc-900/60 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] rounded-2xl flex flex-col",
+      "header": "relative h-64 sm:h-80 w-full overflow-hidden shrink-0 rounded-t-2xl",
+      "security_banner": "bg-gradient-to-r from-[#ff4655]/20 to-transparent border-l-4 border-[#ff4655] p-4 text-white flex items-center gap-3",
+      "stat_grid": "grid grid-cols-2 sm:grid-cols-4 gap-4 p-6",
+      "skin_showcase": "columns-2 sm:columns-3 lg:columns-4 gap-4 space-y-4 p-6",
+      "buy_button": "w-full py-4 bg-[#ff4655] text-white font-bold text-lg rounded-lg transition-all hover:bg-[#ff5b68] shadow-[0_0_20px_rgba(255,70,85,0.4)] border-[#ff4655] uppercase tracking-widest mt-6"
+    }
+  },
+  "media": {
+    "images": {
+      "hero_backgrounds": [
+        {
+          "url": "https://images.unsplash.com/photo-1605901309584-818e25960b8f?q=80&w=2070&auto=format&fit=crop",
+          "description": "Dark red abstract background for modal header",
+          "category": "modal_header"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop",
+          "description": "Esports gaming setup for dashboard hero/banner",
+          "category": "dashboard_hero"
+        }
+      ],
+      "card_patterns": [
+        {
+          "url": "https://images.unsplash.com/photo-1616422285623-14ff01620e64?q=80&w=2070&auto=format&fit=crop",
+          "description": "Neon cyber background for account card thumbnails",
+          "category": "card_thumbnail"
+        }
+      ],
+      "placeholders": [
+        {
+          "url": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+          "description": "Generic dark tech background for missing skins",
+          "category": "skin_placeholder"
+        }
+      ]
+    },
+    "icons_strategy": "Use Lucide-React for ranks, agents, and UI elements. Map specific icons to represent game elements (e.g., Crosshair for rank, Shield for security)."
+  },
+  "animations": {
+    "entrance": "Staggered fade-in-up for product grid items (use framer-motion or css animation).",
+    "hover": "Cards scale up by 1.02, borders glow in #ff4655, image inside card scales up by 1.1.",
+    "modal": "Scale in from 0.95 and fade in."
+  },
+  "instructions_to_main_agent": [
+    "1. Do NOT use standard Shadcn card styles. Implement the custom Account Card wrapper with glassmorphism and nested image structure.",
+    "2. Strict Dark Mode: Ensure no stray white backgrounds. All inputs, dropdowns, and text areas in the sidebar must have transparent or zinc-900 backgrounds with white/10 borders.",
+    "3. Use Lucide-react for all icons.",
+    "4. For the Skin Showcase, implement a masonry layout using CSS columns (e.g., columns-2 sm:columns-3 gap-4) and space-y-4 on children.",
+    "5. Add 'data-testid' to all interactive elements (buttons, filters, cards, modal close, buy button).",
+    "6. Build a mock data layer fetching 25 accounts. Generate random ranks, levels, and skin counts for realism. Include a 'ban_status' field (Safe vs Warning).",
+    "7. Include the Google Fonts for Outfit and Manrope in the main index.html or import them in CSS.",
+    "8. Implement pulsing neon glow on the 'Buy' button using CSS box-shadow animation or Tailwind hover states."
+  ]
+}
