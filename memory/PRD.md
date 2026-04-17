@@ -25,20 +25,27 @@ Clone https://github.com/spung2/sadasdasd into /app and run it.
 
 ## What's Been Implemented (Apr 17, 2026)
 - Full repo mirrored to /app (backend + frontend + memory + tests)
-- Python & Node deps installed (pip install -r requirements.txt, yarn install)
-- Backend .env seeded (empty LZT_MARKET_TOKEN / ADMIN_EMAIL placeholders)
-- Frontend .env preserves Emergent preview URL
-- Supervisor restarted – both services RUNNING
+- Python & Node deps installed, supervisor running
+- LZT_MARKET_TOKEN configured → 35K+ live listings live
+- **Refactor Wave 1 (Apr 17, 2026):**
+  - Product cards: real Valorant agent portraits (fullPortrait + gradient bg) + LoL splash art, defensive image fallback
+  - Valorant skin inventory sorted by tier value (Exclusive → Ultra → Premium → Deluxe → Select → Standard)
+  - LoL skin names mapped via CommunityDragon (real skin names, not just champion name)
+  - Tag blacklist enforced: brute/resale/personal/personel/autoreg never rendered
+  - Origin filter removed entirely
+  - VP/RP totals on product cards (pills) AND modal (gradient highlight cards)
+  - New premium `FilterPanel.jsx` with collapsible sections, chip region selector, glassmorphism
+  - Dynamic landing page: animated count-up live stats + Featured Valorant/LoL carousels
+  - Admin panel expanded: Overview (recharts: line/pie/bar), Sync Status (cache metrics + quick-clear actions)
+  - New backend endpoints: /api/stats/live, /api/featured/{category}, /api/lol/skins-all, /api/admin/analytics, /api/admin/cache/clear
+  - /api/valorant/agents now returns backgroundGradientColors
 
-## Test Status (Iteration 8, Apr 17, 2026)
-- **Backend:** 17/17 passed (100%)
-  - All public endpoints (/api/, /valorant/agents, /valorant/skins, /lol/champions, /profiles)
-  - All auth gates (401/403 on unauthed/non-admin requests)
-  - Error handling (400 invalid category, 502 graceful LZT fallback with empty token)
-  - External API proxy + MongoDB cache verified
+## Test Status
+- **Iteration 9 (Apr 17, 2026):** Backend 29/29 passed (100%). No critical/minor issues.
+- **Iteration 8:** Baseline 17/17 passed.
 
 ## Known Non-Issues
-- `/api/market/search/{valorant|lol}` returns 502 because **LZT_MARKET_TOKEN is empty**. Expected; user must add a real LZT Market API token to `/app/backend/.env` for live market data.
+- `/api/featured/lol` returns 0 items when LoL cache empty (expected graceful fallback).
 
 ## Next Action Items / Backlog
 - P0: Obtain & set `LZT_MARKET_TOKEN` in `/app/backend/.env` to enable live market listings
