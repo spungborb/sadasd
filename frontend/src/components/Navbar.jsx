@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Crosshair, Store, LogOut, Settings } from 'lucide-react';
+import { Crosshair, Store, LogOut, Settings, LayoutDashboard } from 'lucide-react';
 import { logout as apiLogout } from '@/data/api';
 import LangCurrencySwitcher from '@/components/LangCurrencySwitcher';
 
@@ -25,6 +25,7 @@ export default function Navbar({ user, setUser }) {
         </div>
         <div className="hidden md:flex items-center gap-1">
           <button data-testid="nav-marketplace" onClick={() => navigate('/market')} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-white/5"><Store className="w-4 h-4" />Marketplace</button>
+          {user && <button data-testid="nav-dashboard" onClick={() => navigate('/dashboard')} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"><LayoutDashboard className="w-4 h-4" />Dashboard</button>}
           {user?.is_admin && <button data-testid="nav-admin" onClick={() => navigate('/admin')} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"><Settings className="w-4 h-4" />Admin</button>}
         </div>
         <div className="flex items-center gap-3">

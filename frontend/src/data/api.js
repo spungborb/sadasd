@@ -107,6 +107,70 @@ export async function clearAdminCache(scope = 'search') {
   return resp.json();
 }
 
+// ==================== ORDERS / WALLET / TICKETS ====================
+export async function fetchWallet() {
+  const resp = await fetch(`${API}/wallet`, { credentials: 'include' });
+  if (!resp.ok) throw new Error('Not authenticated');
+  return resp.json();
+}
+export async function createOrder(payload) {
+  const resp = await fetch(`${API}/orders`, { method: 'POST', headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
+  if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.detail || `Error: ${resp.status}`); }
+  return resp.json();
+}
+export async function fetchOrders() {
+  const resp = await fetch(`${API}/orders`, { credentials: 'include' });
+  if (!resp.ok) throw new Error('Not authenticated');
+  return resp.json();
+}
+export async function revealOrderCredentials(orderId) {
+  const resp = await fetch(`${API}/orders/${orderId}/reveal`, { method: 'POST', credentials: 'include' });
+  if (!resp.ok) throw new Error('Reveal failed');
+  return resp.json();
+}
+export async function fetchTickets() {
+  const resp = await fetch(`${API}/tickets`, { credentials: 'include' });
+  if (!resp.ok) throw new Error('Not authenticated');
+  return resp.json();
+}
+export async function fetchTicket(ticketId) {
+  const resp = await fetch(`${API}/tickets/${ticketId}`, { credentials: 'include' });
+  if (!resp.ok) throw new Error('Not authenticated');
+  return resp.json();
+}
+export async function createTicket(payload) {
+  const resp = await fetch(`${API}/tickets`, { method: 'POST', headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
+  if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.detail || `Error: ${resp.status}`); }
+  return resp.json();
+}
+export async function replyTicket(ticketId, text) {
+  const resp = await fetch(`${API}/tickets/${ticketId}/messages`, { method: 'POST', headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ text }) });
+  if (!resp.ok) throw new Error('Reply failed');
+  return resp.json();
+}
+export async function pollTicket(ticketId, since = '') {
+  const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+  const resp = await fetch(`${API}/tickets/${ticketId}/poll${qs}`, { credentials: 'include' });
+  if (!resp.ok) throw new Error('Poll failed');
+  return resp.json();
+}
+export async function fetchAdminTickets(status = '') {
+  const qs = status ? `?status=${status}` : '';
+  const resp = await fetch(`${API}/admin/tickets${qs}`, { credentials: 'include' });
+  if (!resp.ok) throw new Error('Admin only');
+  return resp.json();
+}
+export async function adminReplyTicket(ticketId, text) {
+  const resp = await fetch(`${API}/admin/tickets/${ticketId}/reply`, { method: 'POST', headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ text }) });
+  if (!resp.ok) throw new Error('Reply failed');
+  return resp.json();
+}
+export async function adminSetTicketStatus(ticketId, status) {
+  const resp = await fetch(`${API}/admin/tickets/${ticketId}/status`, { method: 'POST', headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ status }) });
+  if (!resp.ok) throw new Error('Status update failed');
+  return resp.json();
+}
+
 // ==================== FAVORITES ====================
 const FAV_KEY = 'lzt_vault_favorites';
 export function getLocalFavorites() { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } }

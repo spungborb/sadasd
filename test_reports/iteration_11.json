@@ -1,0 +1,100 @@
+{
+  "summary": "Backend dashboard features testing complete. All 30 tests passed. Verified all 19 requested features: Orders (POST/GET/reveal), Wallet, Tickets (CRUD + poll), Admin tickets, and Telegram webhook integration with 2-way messaging.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "backend_passed": [
+      "POST /api/orders without auth returns 401",
+      "GET /api/orders without auth returns 401",
+      "GET /api/wallet without auth returns 401",
+      "POST /api/tickets without auth returns 401",
+      "GET /api/tickets without auth returns 401",
+      "GET /api/admin/tickets without auth returns 401",
+      "POST /api/webhook/social-reply WITHOUT secret header returns 403",
+      "POST /api/webhook/social-reply with wrong secret returns 403",
+      "POST /api/webhook/social-reply WITH secret but text missing ticket ID returns ok + ignored=no_ticket_id",
+      "POST /api/webhook/social-reply for non-existent ticket returns ok + ignored=ticket_not_found",
+      "POST /api/webhook/social-reply with no text returns ok + ignored=no_text",
+      "GET /api/auth/me returns 401 (auth gate intact)",
+      "GET /api/market/search/valorant returns 200 (existing endpoint intact)",
+      "GET /api/stats/live returns 200 (existing endpoint intact)",
+      "GET /api/wallet returns balance_usd=0 + transactions array (default)",
+      "POST /api/orders creates order with dummy credentials + warranty based on is_trusted",
+      "GET /api/orders returns user's orders list (credentials excluded)",
+      "POST /api/orders/{id}/reveal returns credentials and increments reveals_count",
+      "POST /api/orders/{id}/reveal for another user's order returns 404",
+      "POST /api/tickets creates ticket with seq ID, messages[0] is user msg, status=open",
+      "GET /api/tickets lists user's own tickets",
+      "GET /api/tickets/{id} returns full thread",
+      "POST /api/tickets/{id}/messages appends user reply",
+      "GET /api/tickets/{id}/poll?since=ISO returns new_messages after timestamp",
+      "GET /api/admin/tickets returns all tickets + counts (requires admin)",
+      "POST /api/admin/tickets/{id}/reply without admin returns 403",
+      "POST /api/admin/tickets/{id}/reply with admin adds message",
+      "POST /api/webhook/social-reply WITH secret + '#seq message' parses ticket, appends admin message, sets status=pending_user",
+      "POST /api/webhook/social-reply WITH secret + 'seq: message' format also parsed correctly",
+      "Webhook messages appear in ticket thread with source=telegram"
+    ],
+    "failed": []
+  },
+  "feature_verification": {
+    "orders": {
+      "create": "Creates order with dummy credentials (login, password, email, email_password, notes)",
+      "warranty_logic": "7 days if is_trusted_seller (extended_guarantee>0 OR origin in personal/autoreg OR nsb==1), else 0 days",
+      "list": "Returns orders without credentials field",
+      "reveal": "Returns credentials and increments reveals_count"
+    },
+    "wallet": {
+      "get": "Returns balance_usd (default 0) + transactions array"
+    },
+    "tickets": {
+      "create": "Creates ticket with TKT-{seq:04d} format, seq from db.counters collection",
+      "list": "Returns user's own tickets",
+      "get": "Returns full thread with all messages",
+      "reply": "Appends user message, sets status=open",
+      "poll": "Returns new_messages since timestamp, status, last_activity, total"
+    },
+    "admin_tickets": {
+      "list": "Returns all tickets + counts (open, pending_user, closed)",
+      "reply": "Adds admin message, sets status=pending_user"
+    },
+    "webhook": {
+      "security": "Requires x-telegram-bot-api-secret-token header matching TELEGRAM_WEBHOOK_SECRET",
+      "parsing": "Supports '#seq message' and 'seq: message' formats",
+      "admin_chat_bypass": "When TELEGRAM_ADMIN_CHAT_ID='YOUR_CHAT_ID_HERE' (placeholder), chat_id check is bypassed",
+      "message_append": "Appends admin message with source=telegram, sets status=pending_user"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_dashboard_features.py",
+    "/app/test_reports/pytest/pytest_iteration11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All dashboard endpoints properly protected with authentication",
+    "Webhook security correctly implemented with secret header validation",
+    "Ticket seq numbering uses db.counters collection for atomic increment",
+    "Credentials properly excluded from order list view but available via reveal endpoint",
+    "Warranty logic correctly implements is_trusted_seller check (extended_guarantee, origin, nsb)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_dashboard_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 tests passed)",
+    "frontend": "N/A (backend-only testing)"
+  },
+  "test_credentials": "Test users created dynamically via pymongo in test fixtures, cleaned up after tests",
+  "seed_data_creation": "Test users, sessions, orders, tickets created and cleaned up in test fixtures",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Dashboard backend features fully verified. Key findings: (1) Orders endpoint creates mock orders with dummy credentials and warranty based on is_trusted_seller logic, (2) Wallet returns balance_usd=0 by default with empty transactions, (3) Tickets use sequential IDs from db.counters collection, (4) Telegram webhook requires secret header and supports '#seq' and 'seq:' message formats, (5) Admin chat check bypassed when TELEGRAM_ADMIN_CHAT_ID is placeholder. All existing endpoints (/api/auth/me, /api/market/search/*, /api/stats/live) remain intact.",
+  "mocked_api_note": "Telegram outbound sendMessage is MOCKED (logs only) when TELEGRAM_BOT_TOKEN='YOUR_BOT_TOKEN_HERE' (placeholder). Inbound webhook is fully functional."
+}

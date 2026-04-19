@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { X, ShieldCheck, ShieldAlert, Crosshair, Sparkles, Star, Clock, TrendingUp, Swords, Gem, Eye, Heart, Gamepad2, Globe, Users, Tag, Loader2, Crown, Trophy, Coins, CircleDollarSign, ExternalLink } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { getValorantRankName, getRankColorFromInt, isLocalFavorite, toggleLocalFavorite, fetchMarketItem, fetchValorantSkins, fetchValorantAgents, fetchLolChampions, fetchLolSkinsAll, addServerFavorite, removeServerFavorite, sortSkinsByValue, formatCompact } from '@/data/api';
+import { getValorantRankName, getRankColorFromInt, isLocalFavorite, toggleLocalFavorite, fetchMarketItem, fetchValorantSkins, fetchValorantAgents, fetchLolChampions, fetchLolSkinsAll, addServerFavorite, removeServerFavorite, sortSkinsByValue, formatCompact, createOrder } from '@/data/api';
 import { usePrefs, formatPrice } from '@/context/PrefContext';
 
 const TIER_COLORS = { Deluxe:'from-emerald-800 to-emerald-950 border-emerald-500/30', Premium:'from-purple-800 to-purple-950 border-purple-500/30', Select:'from-zinc-700 to-zinc-800 border-zinc-500/30', Ultra:'from-amber-800 to-amber-950 border-amber-500/30', Exclusive:'from-red-800 to-red-950 border-valorant/30', Standard:'from-zinc-800 to-zinc-900 border-zinc-600/30' };
@@ -74,6 +74,9 @@ export default function LztPreviewModal({ product, category, onClose }) {
   const [lolChampData, setLolChampData] = useState(null);
   const [lolSkinsAll, setLolSkinsAll] = useState(null);
   const [skinsLoading, setSkinsLoading] = useState(true);
+  const [buyBusy, setBuyBusy] = useState(false);
+  const [buyError, setBuyError] = useState('');
+  const [buySuccess, setBuySuccess] = useState(false);
 
   useEffect(() => {
     fetchMarketItem(product.item_id).then(d => { if (d?.item) setDetailedItem(d.item); }).catch(() => {});
@@ -231,8 +234,23 @@ export default function LztPreviewModal({ product, category, onClose }) {
           <div className="p-6 space-y-6">
             {/* Buy + Tracker buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
-              <button data-testid="buy-now-btn" className="flex-1 py-3.5 bg-valorant text-white font-heading font-bold text-sm uppercase tracking-widest rounded-lg text-center hover:bg-valorant-hover animate-neon-pulse transition-all">
-                Buy Now - {formatPrice(item.price, currency)}
+              <button data-testid="buy-now-btn" onClick={async () => {
+                if (buyBusy) return;
+                setBuyBusy(true); setBuyError(''); setBuySuccess(false);
+                try {
+                  const order = await createOrder({ item_id: item.item_id, category, price: item.price });
+                  setBuySuccess(true);
+                  setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
+                } catch (e) {
+                  if (/401|auth/i.test(e.message)) {
+                    const redirectUrl = window.location.origin + '/';
+                    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+                    return;
+                  }
+                  setBuyError(e.message);
+                } finally { setBuyBusy(false); }
+              }} disabled={buyBusy} className="flex-1 py-3.5 bg-valorant text-white font-heading font-bold text-sm uppercase tracking-widest rounded-lg text-center hover:bg-valorant-hover animate-neon-pulse transition-all disabled:opacity-60">
+                {buySuccess ? '✓ Order Created — Redirecting...' : buyBusy ? 'Processing...' : `Buy (Demo) - ${formatPrice(item.price, currency)}`}
               </button>
               {isVal && trackerUrl && (
                 <a data-testid="tracker-btn" href={trackerUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-5 py-3.5 bg-zinc-800/80 border border-white/10 text-zinc-300 text-sm rounded-lg hover:bg-zinc-800 hover:text-white transition-all">
@@ -250,6 +268,7 @@ export default function LztPreviewModal({ product, category, onClose }) {
                 </a>
               )}
             </div>
+            {buyError && <div data-testid="buy-error" className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-300">{buyError}</div>}
 
             {/* Security */}
             <div data-testid="security-banner" className={`flex items-center gap-3 p-4 rounded-xl border-l-4 ${isRecentlyActive ? 'bg-amber-500/5 border-amber-500 text-amber-400' : 'bg-emerald-500/5 border-emerald-500 text-emerald-400'}`}>

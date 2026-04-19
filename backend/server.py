@@ -21,6 +21,9 @@ db = client[os.environ['DB_NAME']]
 LZT_BASE_URL = os.environ.get('LZT_MARKET_BASE_URL', 'https://prod-api.lzt.market')
 LZT_TOKEN = os.environ.get('LZT_MARKET_TOKEN', '')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', '')
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_ADMIN_CHAT_ID = os.environ.get('TELEGRAM_ADMIN_CHAT_ID', '')
+TELEGRAM_WEBHOOK_SECRET = os.environ.get('TELEGRAM_WEBHOOK_SECRET', '')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -568,7 +571,7 @@ async def get_market_item(item_id: int, request: Request):
         data = resp.json()
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail="LZT API error")
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=502, detail="LZT API error")
     try:
         ea = datetime.now(timezone.utc) + timedelta(seconds=CACHE_TTL_ITEM)
@@ -640,6 +643,325 @@ async def admin_clear_cache(request: Request):
     else:
         raise HTTPException(status_code=400, detail="Invalid scope")
     return {"deleted": result.deleted_count, "scope": scope}
+
+# ======================== ORDERS / WALLET / TICKETS / TELEGRAM ========================
+
+def _is_trusted_listing(item: dict) -> bool:
+    """Decide warranty based on listing provenance signals."""
+    if item.get("extended_guarantee", 0) and int(item.get("extended_guarantee", 0)) > 0:
+        return True
+    origin = str(item.get("item_origin", "")).lower()
+    if origin in ("personal", "autoreg"):
+        return True
+    if item.get("nsb") == 1:
+        return True
+    return False
+
+def _gen_dummy_credentials(category: str, item_id: int) -> dict:
+    """Mock credentials for demo purchases."""
+    rid = f"GV{item_id}{uuid.uuid4().hex[:4].upper()}"
+    return {
+        "login": f"user_{rid.lower()}",
+        "password": f"Temp!{uuid.uuid4().hex[:8]}",
+        "email": f"{rid.lower()}@vault-demo.local",
+        "email_password": f"Mail!{uuid.uuid4().hex[:6]}",
+        "notes": f"Demo credentials for {category} listing #{item_id}. Contact support for real delivery.",
+    }
+
+async def _ensure_wallet(user_id: str) -> dict:
+    w = await db.wallets.find_one({"user_id": user_id}, {"_id": 0})
+    if not w:
+        w = {"user_id": user_id, "balance_usd": 0.0, "currency": "usd", "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.wallets.insert_one(dict(w))
+    return w
+
+@api_router.get("/wallet")
+async def get_wallet(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    w = await _ensure_wallet(user["user_id"])
+    # Transactions (last 20)
+    tx_cursor = db.wallet_transactions.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).limit(20)
+    tx = await tx_cursor.to_list(length=20)
+    return {"balance_usd": float(w.get("balance_usd", 0)), "transactions": tx}
+
+@api_router.post("/orders")
+async def create_order(request: Request):
+    """Demo 'buy' — creates an order from a listing with dummy credentials."""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    body = await request.json()
+    item_id = body.get("item_id")
+    category = body.get("category", "valorant")
+    if not item_id:
+        raise HTTPException(status_code=400, detail="item_id required")
+    # Get listing snapshot
+    try:
+        url = f"{LZT_BASE_URL}/{int(item_id)}"
+        resp = await http_client.get(url)
+        listing = resp.json() if resp.status_code == 200 else {}
+        item = listing.get("item", listing) if isinstance(listing, dict) else {}
+    except Exception:
+        item = {}
+    # Apply commission to snapshot the final price user saw
+    settings = await get_settings()
+    price_usd = float(item.get("price", body.get("price", 0)))
+    pct = settings.get("commission", {}).get(category, 100) / 100.0
+    final_price = round(price_usd * (1 + pct), 2) if price_usd else float(body.get("price", 0))
+    is_trusted = _is_trusted_listing(item)
+    warranty_days = 7 if is_trusted else 0
+    now = datetime.now(timezone.utc)
+    warranty_expires = (now + timedelta(days=warranty_days)).isoformat() if warranty_days > 0 else None
+    order_id = f"ORD_{uuid.uuid4().hex[:10].upper()}"
+    order_doc = {
+        "order_id": order_id,
+        "user_id": user["user_id"],
+        "item_id": int(item_id),
+        "category": category,
+        "title": item.get("title") or item.get("title_en") or f"Listing #{item_id}",
+        "region": item.get("riot_valorant_region") or item.get("riot_lol_region") or "",
+        "rank_name": item.get("riot_valorant_rank_title") or item.get("riot_lol_rank") or "",
+        "price_usd": final_price,
+        "credentials": _gen_dummy_credentials(category, int(item_id)),
+        "is_trusted_seller": is_trusted,
+        "warranty_days": warranty_days,
+        "warranty_expires_at": warranty_expires,
+        "status": "delivered",
+        "reveals_count": 0,
+        "created_at": now.isoformat(),
+    }
+    await db.orders.insert_one(dict(order_doc))
+    order_doc.pop("_id", None)
+    return order_doc
+
+@api_router.get("/orders")
+async def list_orders(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    cursor = db.orders.find({"user_id": user["user_id"]}, {"_id": 0, "credentials": 0}).sort("created_at", -1).limit(200)
+    orders = await cursor.to_list(length=200)
+    return {"orders": orders}
+
+@api_router.post("/orders/{order_id}/reveal")
+async def reveal_credentials(order_id: str, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    order = await db.orders.find_one({"order_id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    await db.orders.update_one({"order_id": order_id}, {"$inc": {"reveals_count": 1}, "$set": {"last_reveal_at": datetime.now(timezone.utc).isoformat()}})
+    return {"credentials": order.get("credentials", {}), "reveals_count": order.get("reveals_count", 0) + 1}
+
+# ---- Tickets ----
+
+async def _next_ticket_seq() -> int:
+    res = await db.counters.find_one_and_update(
+        {"_id": "ticket_seq"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    if res is None:
+        # Motor 3.3 returns None with return_document=True on upsert when missing; re-read
+        doc = await db.counters.find_one({"_id": "ticket_seq"})
+        return int(doc.get("seq", 1)) if doc else 1
+    return int(res.get("seq", 1))
+
+async def _send_telegram(text: str, parse_mode: str = "HTML") -> bool:
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE" or not TELEGRAM_ADMIN_CHAT_ID or TELEGRAM_ADMIN_CHAT_ID == "YOUR_CHAT_ID_HERE":
+        logger.info(f"[TELEGRAM MOCK] {text}")
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        async with httpx.AsyncClient(timeout=10.0) as ac:
+            r = await ac.post(url, json={"chat_id": TELEGRAM_ADMIN_CHAT_ID, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True})
+        return r.status_code == 200
+    except Exception as e:
+        logger.error(f"Telegram send failed: {e}")
+        return False
+
+@api_router.post("/tickets")
+async def create_ticket(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    body = await request.json()
+    subject = (body.get("subject") or "").strip() or "General Inquiry"
+    first_message = (body.get("message") or "").strip()
+    order_id = body.get("order_id")
+    if not first_message:
+        raise HTTPException(status_code=400, detail="message required")
+    seq = await _next_ticket_seq()
+    ticket_id = f"TKT-{seq:04d}"
+    now = datetime.now(timezone.utc).isoformat()
+    msg = {"msg_id": uuid.uuid4().hex[:10], "from": "user", "text": first_message, "author_email": user.get("email", ""), "author_name": user.get("name", ""), "created_at": now}
+    doc = {
+        "ticket_id": ticket_id,
+        "seq": seq,
+        "user_id": user["user_id"],
+        "user_email": user.get("email", ""),
+        "user_name": user.get("name", ""),
+        "order_id": order_id,
+        "subject": subject,
+        "status": "open",  # open | pending_user | closed
+        "messages": [msg],
+        "last_activity": now,
+        "created_at": now,
+    }
+    await db.tickets.insert_one(dict(doc))
+    # Outbound telegram
+    preview = first_message[:300] + ("..." if len(first_message) > 300 else "")
+    await _send_telegram(
+        f"🎫 <b>New Ticket #{seq}</b>\n"
+        f"From: <b>{user.get('name') or user.get('email')}</b>\n"
+        f"Subject: <i>{subject}</i>\n"
+        f"Order: {order_id or '—'}\n\n"
+        f"{preview}\n\n"
+        f"<b>Reply format:</b> <code>#{seq} your response</code>"
+    )
+    doc.pop("_id", None)
+    return doc
+
+@api_router.get("/tickets")
+async def list_tickets(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    cursor = db.tickets.find({"user_id": user["user_id"]}, {"_id": 0}).sort("last_activity", -1).limit(100)
+    return {"tickets": await cursor.to_list(length=100)}
+
+@api_router.get("/tickets/{ticket_id}")
+async def get_ticket(ticket_id: str, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    t = await db.tickets.find_one({"ticket_id": ticket_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return t
+
+@api_router.post("/tickets/{ticket_id}/messages")
+async def reply_ticket(ticket_id: str, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text required")
+    t = await db.tickets.find_one({"ticket_id": ticket_id, "user_id": user["user_id"]}, {"_id": 0, "seq": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    now = datetime.now(timezone.utc).isoformat()
+    msg = {"msg_id": uuid.uuid4().hex[:10], "from": "user", "text": text, "author_email": user.get("email", ""), "author_name": user.get("name", ""), "created_at": now}
+    await db.tickets.update_one({"ticket_id": ticket_id}, {"$push": {"messages": msg}, "$set": {"last_activity": now, "status": "open"}})
+    seq = t.get("seq", 0)
+    preview = text[:300] + ("..." if len(text) > 300 else "")
+    await _send_telegram(f"💬 <b>Ticket #{seq}</b> — user reply:\n{preview}\n\n<code>#{seq} your response</code>")
+    return {"message": msg}
+
+# Polling endpoint — returns any NEW admin messages since `since` ISO timestamp
+@api_router.get("/tickets/{ticket_id}/poll")
+async def poll_ticket(ticket_id: str, since: str = "", request: Request = None):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    t = await db.tickets.find_one({"ticket_id": ticket_id, "user_id": user["user_id"]}, {"_id": 0, "messages": 1, "status": 1, "last_activity": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    msgs = t.get("messages", [])
+    new_msgs = [m for m in msgs if m.get("created_at", "") > (since or "")] if since else []
+    return {"status": t.get("status"), "last_activity": t.get("last_activity"), "new_messages": new_msgs, "total": len(msgs)}
+
+# ---- Admin ticket endpoints ----
+
+@api_router.get("/admin/tickets")
+async def admin_list_tickets(request: Request, status: str = ""):
+    await check_admin(request)
+    q = {"status": status} if status else {}
+    cursor = db.tickets.find(q, {"_id": 0}).sort("last_activity", -1).limit(200)
+    tickets = await cursor.to_list(length=200)
+    # summary
+    open_count = await db.tickets.count_documents({"status": "open"})
+    pending_count = await db.tickets.count_documents({"status": "pending_user"})
+    closed_count = await db.tickets.count_documents({"status": "closed"})
+    return {"tickets": tickets, "counts": {"open": open_count, "pending_user": pending_count, "closed": closed_count}}
+
+@api_router.post("/admin/tickets/{ticket_id}/reply")
+async def admin_reply_ticket(ticket_id: str, request: Request):
+    user = await check_admin(request)
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text required")
+    t = await db.tickets.find_one({"ticket_id": ticket_id}, {"_id": 0, "seq": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    now = datetime.now(timezone.utc).isoformat()
+    msg = {"msg_id": uuid.uuid4().hex[:10], "from": "admin", "text": text, "author_email": user.get("email", "admin"), "author_name": user.get("name", "Admin"), "created_at": now}
+    await db.tickets.update_one({"ticket_id": ticket_id}, {"$push": {"messages": msg}, "$set": {"last_activity": now, "status": "pending_user"}})
+    return {"message": msg}
+
+@api_router.post("/admin/tickets/{ticket_id}/status")
+async def admin_set_status(ticket_id: str, request: Request):
+    await check_admin(request)
+    body = await request.json()
+    status_new = body.get("status", "")
+    if status_new not in ("open", "pending_user", "closed"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    result = await db.tickets.update_one({"ticket_id": ticket_id}, {"$set": {"status": status_new, "last_activity": datetime.now(timezone.utc).isoformat()}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return {"ticket_id": ticket_id, "status": status_new}
+
+# ---- Inbound Telegram webhook (2-way logic) ----
+
+@api_router.post("/webhook/social-reply")
+async def social_reply_webhook(request: Request):
+    """Inbound webhook — Telegram bot sends admin replies here.
+    Format expected: "#1024 your message" OR "1024: your message".
+    Admin sets their Telegram bot webhook to this URL with secret_token header for auth.
+    """
+    # Verify secret (Telegram sends X-Telegram-Bot-Api-Secret-Token header if set)
+    if TELEGRAM_WEBHOOK_SECRET:
+        got = request.headers.get("x-telegram-bot-api-secret-token", "")
+        if got != TELEGRAM_WEBHOOK_SECRET:
+            raise HTTPException(status_code=403, detail="Invalid secret")
+    body = await request.json()
+    # Support Telegram's update structure
+    message = body.get("message") or body.get("edited_message") or {}
+    from_user = message.get("from", {}) or {}
+    chat = message.get("chat", {}) or {}
+    text = (message.get("text") or "").strip()
+    # Only accept replies from admin chat (if configured)
+    if TELEGRAM_ADMIN_CHAT_ID and TELEGRAM_ADMIN_CHAT_ID != "YOUR_CHAT_ID_HERE":
+        if str(chat.get("id", "")) != str(TELEGRAM_ADMIN_CHAT_ID):
+            logger.warning(f"Webhook ignored: chat_id {chat.get('id')} != admin {TELEGRAM_ADMIN_CHAT_ID}")
+            return {"ok": True, "ignored": "chat_not_admin"}
+    if not text:
+        return {"ok": True, "ignored": "no_text"}
+    # Parse ticket id: "#1024 ..." or "1024: ..." or "1024 ..."
+    import re
+    m = re.match(r"^\s*#?(\d{1,6})[\s:,-]+(.+)$", text, flags=re.DOTALL)
+    if not m:
+        return {"ok": True, "ignored": "no_ticket_id"}
+    seq = int(m.group(1))
+    msg_text = m.group(2).strip()
+    t = await db.tickets.find_one({"seq": seq}, {"_id": 0, "ticket_id": 1})
+    if not t:
+        await _send_telegram(f"⚠️ Ticket #{seq} not found.")
+        return {"ok": True, "ignored": "ticket_not_found"}
+    now = datetime.now(timezone.utc).isoformat()
+    admin_name = from_user.get("first_name") or from_user.get("username") or "Admin"
+    msg_doc = {"msg_id": uuid.uuid4().hex[:10], "from": "admin", "text": msg_text, "author_email": f"telegram:{from_user.get('username','admin')}", "author_name": admin_name, "created_at": now, "source": "telegram"}
+    await db.tickets.update_one({"ticket_id": t["ticket_id"]}, {"$push": {"messages": msg_doc}, "$set": {"last_activity": now, "status": "pending_user"}})
+    # Optionally ack back
+    await _send_telegram(f"✅ Reply sent to Ticket #{seq}.")
+    return {"ok": True, "ticket_id": t["ticket_id"], "seq": seq}
 
 # ======================== HEALTH ========================
 @api_router.get("/")

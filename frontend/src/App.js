@@ -4,6 +4,7 @@ import LandingPage from "@/components/LandingPage";
 import Dashboard from "@/components/Dashboard";
 import AuthCallback from "@/components/AuthCallback";
 import AdminDashboard from "@/components/AdminDashboard";
+import UserDashboard from "@/components/UserDashboard";
 import { PrefProvider } from "@/context/PrefContext";
 
 function AppRouter() {
@@ -13,6 +14,7 @@ function AppRouter() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/market" element={<Dashboard />} />
+      <Route path="/dashboard" element={<UserDashboard />} />
       <Route path="/admin" element={<AdminDashboard />} />
     </Routes>
   );

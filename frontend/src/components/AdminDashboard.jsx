@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMe, fetchAdminSettings, updateAdminSettings, fetchProfiles, createProfile, deleteProfile, fetchAdminAnalytics, clearAdminCache } from '@/data/api';
-import { Save, Settings, Percent, Link as LinkIcon, Plus, Trash2, Crosshair, Crown, ShoppingBag, LayoutDashboard, Globe, Database, RefreshCw, Activity, Users, TrendingUp, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { fetchMe, fetchAdminSettings, updateAdminSettings, fetchProfiles, createProfile, deleteProfile, fetchAdminAnalytics, clearAdminCache, fetchAdminTickets, adminReplyTicket, adminSetTicketStatus, fetchTicket } from '@/data/api';
+import { Save, Settings, Percent, Link as LinkIcon, Plus, Trash2, Crosshair, Crown, ShoppingBag, LayoutDashboard, Globe, Database, RefreshCw, Activity, Users, TrendingUp, CheckCircle2, XCircle, AlertCircle, MessageSquare, Send, ArrowLeft, Clock, Hash, Shield } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
+import AdminSupportPanel from '@/components/AdminSupportPanel';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'support', label: 'Support', icon: MessageSquare },
   { id: 'profiles', label: 'Fetch Profiles', icon: LinkIcon },
   { id: 'pricing', label: 'Pricing', icon: Percent },
   { id: 'sync', label: 'Sync Status', icon: Database },
@@ -241,6 +243,9 @@ export default function AdminDashboard() {
               )}
             </>
           )}
+
+          {/* ===== SUPPORT TAB ===== */}
+          {activeTab === 'support' && <AdminSupportPanel />}
 
           {/* ===== PROFILES TAB ===== */}
           {activeTab === 'profiles' && (
