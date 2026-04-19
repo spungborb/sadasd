@@ -24,20 +24,23 @@ Clone https://github.com/spung2/sadasdasd into /app and run it.
 - MongoDB TTL cache for external API responses
 
 ## What's Been Implemented (Apr 17, 2026)
-- Full repo mirrored to /app, LZT token configured, 41K+ live listings
-- **Refactor Wave 1:** cards with agent portraits, VP/RP pills, tier-sorted skins, LoL real skin names, origin blacklist, premium FilterPanel, dynamic landing, admin Overview/Sync tabs
-- **Refactor Wave 2 (Apr 17, 2026):**
-  - Fixed broken filters: backend uses `query_params.multi_items()`, frontend uses bracketed array keys for LZT; region codes uppercase (LZT is case-sensitive)
-  - Advanced filters added: Skin Search text input, dual-range sliders for Level/Skins/VP/RP (Valorant) and Level/Skins/BE/RP (LoL); LoL rank dropdown
-  - Language & Currency moved from sidebar to Navbar via `LangCurrencySwitcher` + global `PrefContext`
-  - Client-side currency conversion with fixed USD rates (USD/EUR/GBP/RUB/TRY), applied globally through `formatPrice()` in cards / modals / compare view
-  - Featured Valorant/LoL carousels removed from Landing — flow now Hero → Live Stats → Why Game Vault
-  - ProductCard redesign: image contains only top-left icons + top-right region badge (no bottom overlay); title = rank only; price prominent; unified stats pill row (LV, Skins, Agents, Knives, VP, RP / LV, Skins, Champs, BE, RP)
+- Full repo mirrored to /app, LZT token configured
+- **Wave 1:** cards with agent portraits, VP/RP pills, tier-sorted skins, LoL real skin names, origin blacklist, premium FilterPanel, dynamic landing, admin Overview/Sync tabs
+- **Wave 2:** filter bugfix (LZT case-sensitive regions + multi_items), advanced filters (skin search, dual sliders), Language/Currency to Navbar (global PrefContext + formatPrice), Featured carousels removed, ProductCard unified stats row
+- **Wave 3 (Apr 17-19, 2026) — User Dashboard + Ticket System + Telegram:**
+  - New route `/dashboard` with 4 tabs: Account Settings (Google profile, timezone, language), Store Balance (wallet card + transactions), Purchase Vault (orders with credential reveal + live warranty countdown), Support Tickets (create/reply with polling)
+  - Demo "Buy" button on ProductModal → creates mock order with dummy credentials; warranty 7d if `is_trusted_seller` (extended_guarantee>0 OR item_origin in personal/autoreg OR nsb==1), else 0d
+  - Tickets: TKT-{seq:04d} IDs from `db.counters`, embedded messages array, statuses open/pending_user/closed
+  - Admin Support panel (`/admin → Support`): filter by status, thread view, reply, close/reopen
+  - **2-way Telegram webhook**: outbound on ticket events → sends formatted message to admin chat; inbound `/api/webhook/social-reply` parses `"#seq message"` or `"seq: message"` → appends admin reply, status → pending_user
+  - Secret-gated webhook (`X-Telegram-Bot-Api-Secret-Token`), admin chat restriction (bypassed while placeholder)
+  - Frontend polling every 20-30s on open ticket thread
 
 ## Test Status
-- **Iteration 10 (Apr 17, 2026):** Backend 16/16 passed (100%) — filter pipeline validated
-- **Iteration 9:** 29/29 passed — new endpoints + auth gates
-- **Iteration 8:** 17/17 passed — baseline
+- **Iteration 11 (Apr 19, 2026):** Backend 30/30 passed (100%) — dashboard + tickets + webhook
+- **Iteration 10:** 16/16 — filter pipeline
+- **Iteration 9:** 29/29 — landing + admin analytics endpoints
+- **Iteration 8:** 17/17 — baseline
 
 ## Known Non-Issues
 - `/api/featured/lol` returns 0 items when LoL cache empty (expected graceful fallback).
